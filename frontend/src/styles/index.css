@@ -1,0 +1,216 @@
+@import "tailwindcss";
+@import "@fontsource/red-hat-display/500.css";
+@import "@fontsource/red-hat-display/700.css";
+@import "@fontsource/red-hat-display/900.css";
+@import "@fontsource/onest/400.css";
+@import "@fontsource/onest/500.css";
+@import "@fontsource/onest/600.css";
+@import "./tokens.css";
+
+@layer base {
+  body {
+    margin: 0;
+    background: var(--color-fundo);
+    color: var(--color-texto);
+    font-family: var(--font-corpo);
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+
+  /* showModal() já bloqueia clique, foco e Tab fora do diálogo; falta travar a rolagem da página atrás dele. */
+  /* shortcut: overflow hidden não trava rolagem por toque no iOS Safari, trocar por position: fixed no body se virar queixa. */
+  body:has(dialog:modal) {
+    overflow: hidden;
+  }
+
+  /* Seleção de texto e controles nativos (checkbox, rádio) no tom da marca, nos dois temas. */
+  :root {
+    accent-color: var(--color-primaria);
+  }
+
+  /* No celular a barra inferior fixa (64px + área segura) cobriria o elemento focado pelo Tab (WCAG 2.4.11). */
+  @media (width < 48rem) {
+    :root {
+      scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    }
+  }
+
+  /* Barras de rolagem finas, sem setas e nas cores do tema. Chromium/Safari: pseudo-elementos (sem setas, que colidiam com
+     o canto arredondado da moldura das tabelas). O polegar fica 2px afastado da borda para não ser cortado pelo canto. */
+  ::-webkit-scrollbar {
+    width: 0.625rem;
+    height: 0.625rem;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    background: var(--color-borda-campo);
+    background-clip: padding-box;
+  }
+
+  /* Trilho afastado das pontas: nas molduras arredondadas (raio 20px) o polegar no topo ou no fim ficava escondido pelo canto. */
+  ::-webkit-scrollbar-track {
+    margin: 0.75rem;
+  }
+
+  /* Canto onde as barras vertical e horizontal se encontram: sem isto fica um quadrado opaco do navegador. */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Firefox não tem os pseudo-elementos: usa as propriedades padrão. Só aqui, porque no Chromium elas anulam as regras acima.
+     scrollbar-color herda, scrollbar-width não: por isso a largura vai em `*`. */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+    }
+
+    :root {
+      scrollbar-color: var(--color-borda-campo) transparent;
+    }
+  }
+
+  ::selection {
+    background: var(--color-primaria);
+    color: var(--color-primaria-texto);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primaria);
+    outline-offset: 2px;
+  }
+
+  /* Autopreenchimento (gerenciador de senhas): cobre o fundo azul/amarelo do navegador com a superfície do tema. */
+  input:autofill {
+    -webkit-text-fill-color: var(--color-texto);
+    box-shadow: inset 0 0 0 100rem var(--color-superficie);
+    caret-color: var(--color-texto);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --entrada-y: 0;
+      --entrada-escala: 1;
+    }
+  }
+}
+
+/* No desktop quem rola é o <main> (AppShell), não o body: a trava do modal precisa alcançá-lo.
+   Fora de @layer para vencer a utility md:overflow-y-auto. */
+body:has(dialog:modal) main {
+  overflow: hidden;
+}
+
+/* Diálogo: entra em 200 ms (fade e leve subida; só fade em prefers-reduced-motion, via --entrada-y).
+   Sem transição de saída: o conteúdo desmonta ao fechar, então o fechamento é imediato. */
+@layer base {
+  dialog[open] {
+    transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), translate 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  dialog[open]::backdrop {
+    transition: opacity 200ms ease-out;
+  }
+  @starting-style {
+    dialog[open] {
+      opacity: 0;
+      translate: 0 var(--entrada-y, 0.5rem);
+    }
+    dialog[open]::backdrop {
+      opacity: 0;
+    }
+  }
+
+  /* Popover (menu "Mais"): mesma chegada do diálogo, subindo de baixo, porque ele abre acima da barra inferior. */
+  [popover]:popover-open {
+    transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), translate 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @starting-style {
+    [popover]:popover-open {
+      opacity: 0;
+      translate: 0 var(--entrada-y, 0.5rem);
+    }
+  }
+}
+
+/* Lista de opções do <select> com o visual do menu "Mais" (BarraInferior) em vez do popup do sistema operacional.
+   Só o Chromium (Chrome/Edge 135+) entende base-select; nos demais a lista nativa continua como está. */
+@layer base {
+  @supports (appearance: base-select) {
+    select,
+    select::picker(select) {
+      appearance: base-select;
+    }
+
+    /* O select vira flex: sem isto o texto fica no topo da caixa (visível nas pílulas h-9) enquanto o chevron centraliza. */
+    select {
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Chevron da Lucide (mesmo dos botões) no lugar do triângulo padrão do Chromium. */
+    select::picker-icon {
+      content: "";
+      width: 1rem;
+      height: 1rem;
+      background: var(--color-suave);
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+      transition: rotate 150ms ease-out;
+    }
+
+    select:open::picker-icon {
+      rotate: 180deg;
+    }
+
+    select::picker(select) {
+      margin-block: 0.25rem;
+      padding: 0.375rem;
+      border: 1px solid var(--color-borda);
+      border-radius: 0.75rem;
+      background: var(--color-superficie);
+      color: var(--color-texto);
+      box-shadow:
+        0 10px 15px -3px rgb(0 0 0 / 0.12),
+        0 4px 6px -4px rgb(0 0 0 / 0.12);
+    }
+
+    select option {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.5rem;
+      font-size: 0.875rem;
+    }
+
+    select option:hover {
+      background: var(--color-linha);
+    }
+
+    select option:focus-visible {
+      outline: 2px solid var(--color-primaria);
+      outline-offset: -2px;
+    }
+
+    select option:checked {
+      background: var(--color-realce);
+      font-weight: 500;
+    }
+
+    select option:disabled {
+      opacity: 0.6;
+    }
+
+    select option::checkmark {
+      order: 1;
+      margin-inline-start: auto;
+      color: var(--color-primaria);
+    }
+
+    @media (pointer: coarse) {
+      select option {
+        min-height: 2.75rem;
+      }
+    }
+  }
+}

@@ -1,0 +1,143 @@
+/* Tokens do protótipo. Hex só vive aqui; componentes usam as cores semânticas do @theme. */
+:root {
+  --bg: #F5F4F0;
+  --sf: #FFFFFF;
+  --ink: #17152C;
+  --mu: #5F5E74;
+  --bd: #E2E0D8;
+  --bd-campo: #8A8899; /* contorno de campo: ≥3:1 sobre --sf e --bg (WCAG 1.4.11) */
+  --pri: #2B1F7E;
+  --pri-fg: #FFFFFF;
+  --tint: #EEEDF8;
+  --blk: #17152C;
+  --blk-fg: #FFFFFF;
+  --info: #1A67AC; /* 4.99:1 sobre --info-bg */
+  --info-bg: #E3EEF9;
+  --amber: #D08700;
+  --amber-ink: #7A4F00;
+  --amber-soft: #FBF0D9;
+  --teal: #A53A7D;
+  --teal-bg: #F7E6F1;
+  --red: #B3261E;
+  --red-bg: #FBEAEA;
+  --green: #2B7549; /* 4.92:1 sobre --green-bg */
+  --green-bg: #E7F3EC;
+  --hatch: #E9E7E0;
+  --row: #F9F8F4;
+  color-scheme: light;
+}
+
+[data-theme="escuro"] {
+  color-scheme: dark; /* controles nativos acompanham o tema */
+  --bg: #141416;
+  --sf: #1C1C1F;
+  --ink: #ECECEE;
+  --mu: #9D9DA6;
+  --bd: #2C2C32;
+  --bd-campo: #76767F;
+  --pri: #B3ABF2;
+  --pri-fg: #141416;
+  --tint: #27272D;
+  --blk: #3B3666; /* mais claro e mais violeta que a superfície (1,5:1): o bloco de destaque não vira buraco */
+  --info: #7FB4F0;
+  --info-bg: #1D2B3C;
+  --amber: #E8A93A;
+  --amber-ink: #F3C56B;
+  --amber-soft: #33280F;
+  --teal: #E08BC5;
+  --teal-bg: #3A2234;
+  --red: #F28B82;
+  --red-bg: #3A2224;
+  --green: #7FD1A5;
+  --green-bg: #1F3328;
+  --hatch: #303036;
+  --row: #19191C;
+}
+
+/*
+ * Significado das cores (legenda do protótipo):
+ * urgente = prazo estourado/faltas; aguardando = ciência/assinatura de terceiros;
+ * info = em acompanhamento; atividade = reuniões e atividades nos cursos;
+ * realizado = realizado/alta; neutro (suave/hachura) = bloqueio, livre, sem desfecho.
+ */
+@theme {
+  --color-*: initial;
+  --color-fundo: var(--bg);
+  --color-superficie: var(--sf);
+  --color-texto: var(--ink);
+  --color-suave: var(--mu);
+  --color-borda: var(--bd);
+  --color-borda-campo: var(--bd-campo);
+  --color-primaria: var(--pri);
+  --color-primaria-texto: var(--pri-fg);
+  --color-realce: var(--tint);
+  --color-bloco: var(--blk);
+  --color-bloco-texto: var(--blk-fg);
+  --color-info: var(--info);
+  --color-info-fundo: var(--info-bg);
+  --color-aguardando: var(--amber);
+  --color-aguardando-texto: var(--amber-ink);
+  --color-aguardando-fundo: var(--amber-soft);
+  --color-atividade: var(--teal);
+  --color-atividade-fundo: var(--teal-bg);
+  --color-urgente: var(--red);
+  --color-urgente-fundo: var(--red-bg);
+  --color-realizado: var(--green);
+  --color-realizado-fundo: var(--green-bg);
+  --color-hachura: var(--hatch);
+  --color-linha: var(--row);
+
+  --font-titulo: "Red Hat Display", sans-serif;
+  --font-corpo: "Onest", sans-serif;
+
+  /* Escala em rem: acompanha o tamanho de fonte escolhido no navegador. Tamanhos de exibição raros ficam em rem arbitrário. */
+  --text-micro: 0.65625rem; /* 10,5px */
+  --text-mini: 0.6875rem; /* 11px */
+  --text-rotulo: 0.78125rem; /* 12,5px */
+  --text-denso: 0.8125rem; /* 13px */
+  --text-corpo: 0.84375rem; /* 13,5px */
+  --text-destaque: 0.9375rem; /* 15px */
+  --text-titulo-pagina: 1.625rem; /* 26px */
+
+  --radius-campo: 10px;
+  --radius-bloco: 14px;
+  --radius-cartao: 18px;
+  --radius-secao: 20px;
+
+  /* Entrada de página: deslocamento e escala zeram em prefers-reduced-motion (index.css), sobra só o fade. */
+  --animate-entrada: entrada 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-aproximar: aproximar 1.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* Chegada curta do conteúdo (página, aba, aviso, conteúdo que substitui skeleton): mesma curva do login, 200 ms.
+     `backwards`, não `both`: com o preenchimento final a opacidade fica presa à animação e o elemento não consegue mais transicionar. */
+  --animate-surgir: entrada 0.2s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  @keyframes entrada {
+    from {
+      opacity: 0;
+      transform: translateY(var(--entrada-y, 0.75rem));
+    }
+  }
+  @keyframes aproximar {
+    from {
+      opacity: 0;
+      transform: scale(var(--entrada-escala, 1.04));
+    }
+  }
+
+  /* Gráficos: cada barra cresce da base (ou da esquerda, com --crescer-de) e cada fatia do anel se traça no sentido horário.
+     Só na montagem; os elementos levam motion-reduce:animate-none e aparecem prontos. */
+  --animate-crescer: crescer 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  --animate-tracar: tracar 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  @keyframes crescer {
+    from {
+      clip-path: inset(var(--crescer-de, 100% 0 0 0));
+    }
+    to {
+      clip-path: inset(0);
+    }
+  }
+  @keyframes tracar {
+    from {
+      stroke-dasharray: 0 1000;
+    }
+  }
+}

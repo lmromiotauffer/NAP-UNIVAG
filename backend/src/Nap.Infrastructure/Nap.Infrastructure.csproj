@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <!-- IHttpContextAccessor (UsuarioAtual) e Identity vêm do framework compartilhado do ASP.NET Core -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
+    <!-- emissão do JWT (Microsoft.IdentityModel.JsonWebTokens), na mesma versão que a Api usa para validar -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <!-- PDF do PEI (MIT) -->
+    <PackageReference Include="PDFsharp-MigraDoc" />
+    <!-- Excel da produção (MIT) -->
+    <PackageReference Include="ClosedXML" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Liberation Sans (OFL 1.1, licença em Pdf/Fontes/LICENSE): PDF idêntico em qualquer SO -->
+    <EmbeddedResource Include="Pdf\Fontes\*.ttf" LogicalName="Nap.Infrastructure.Pdf.Fontes.%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Nap.Application\Nap.Application.csproj" />
+    <ProjectReference Include="..\Nap.Domain\Nap.Domain.csproj" />
+  </ItemGroup>
+</Project>

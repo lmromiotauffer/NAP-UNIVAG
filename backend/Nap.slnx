@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Nap.Domain/Nap.Domain.csproj" />
+    <Project Path="src/Nap.Application/Nap.Application.csproj" />
+    <Project Path="src/Nap.Infrastructure/Nap.Infrastructure.csproj" />
+    <Project Path="src/Nap.Api/Nap.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Nap.Domain.Tests/Nap.Domain.Tests.csproj" />
+    <Project Path="tests/Nap.Application.Tests/Nap.Application.Tests.csproj" />
+    <Project Path="tests/Nap.Infrastructure.Tests/Nap.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Nap.Api.Tests/Nap.Api.Tests.csproj" />
+  </Folder>
+</Solution>

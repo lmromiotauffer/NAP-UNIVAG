@@ -1,0 +1,47 @@
+using FluentValidation;
+using Nap.Application.Comum;
+using Nap.Application.Features.Agenda;
+using Nap.Domain.Comum.ValueObjects;
+
+namespace Nap.Application.Features.Producao.Commands;
+
+public record RegistrarRealizacaoCommand(Guid CompromissoId, string? Versao, DateTimeOffset Inicio, DateTimeOffset Fim);
+
+public class RegistrarRealizacaoValidator : AbstractValidator<RegistrarRealizacaoCommand>
+{
+    public RegistrarRealizacaoValidator()
+    {
+        RuleFor(x => x.CompromissoId).NotEmpty();
+        RuleFor(x => x.Fim).GreaterThan(x => x.Inicio).WithMessage("O horário de término deve ser posterior ao de início.")
+            .Must((x, fim) => fim - x.Inicio <= TimeSpan.FromHours(12)).WithMessage("A duração não pode ultrapassar 12 horas.");
+    }
+}
+
+public sealed class RegistrarRealizacaoHandler(IValidator<RegistrarRealizacaoCommand> validador, IAgendaRepository agenda,
+    IUsuarioAtual usuario, IRelogio relogio, IAuditoria auditoria, IUnidadeDeTrabalho uow, ICacheConsultas cache,
+    ServicoFechamento fechamento)
+{
+    public async Task Handle(RegistrarRealizacaoCommand comando, CancellationToken ct = default)
+    {
+        await validador.ValidarAsync(comando, ct);
+        if (!usuario.EhEquipeNap()) throw new ForbiddenException();
+
+        var compromisso = await agenda.ObterAsync(comando.CompromissoId, ct) ?? throw new NotFoundException("Compromisso");
+        if (!usuario.EhCoordenacao() && compromisso.ProfissionalId != usuario.Id) throw new ForbiddenException();
+        uow.ExigirVersao(compromisso, comando.Versao ?? string.Empty);
+
+        var efetivo = IntervaloHorario.Criar(comando.Inicio, comando.Fim);
+        await uow.EmTransacaoAsync(async tct =>
+        {
+            // O horário agendado e o efetivo podem cair em semanas diferentes.
+            await fechamento.ExigirSemanaAbertaAsync(compromisso.ProfissionalId, compromisso.Intervalo.Inicio, tct);
+            await fechamento.ExigirSemanaAbertaAsync(compromisso.ProfissionalId, efetivo.Inicio, tct);
+            await agenda.GarantirSemConflitoAsync(compromisso.ProfissionalId, compromisso.AlunoId, efetivo, compromisso.Id, true, tct);
+            compromisso.RegistrarRealizacao(efetivo, usuario.Id, relogio.Agora);
+            auditoria.Registrar("compromisso.realizacao", "Compromisso", compromisso.Id);
+            await uow.SalvarAsync(tct);
+            return compromisso.Id;
+        }, ct);
+        await cache.InvalidarAreaAsync(ct);
+    }
+}

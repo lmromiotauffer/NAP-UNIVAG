@@ -1,0 +1,20 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+*.log
+# Node
+node_modules/
+dist/
+.angular/
+npm-debug.log*
+# Local
+.env
+appsettings.Development.json
+backend/arquivos/
+
+# Sessões do Playwright MCP
+.playwright-mcp/
