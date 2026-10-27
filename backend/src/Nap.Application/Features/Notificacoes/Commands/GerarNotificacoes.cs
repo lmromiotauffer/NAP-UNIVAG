@@ -19,6 +19,9 @@ public sealed class GerarNotificacoesHandler(INotificacaoRepository notificacoes
     public const string AssuntoEmail = "Você tem uma nova notificação no NAP";
     private const string CorpoEmail = "Acesse o NAP para ver os detalhes.";
 
+    /// <summary>Rota da SPA da mensagem; a leitura dela (MarcarMensagemLida) acha a notificação por este link.</summary>
+    public static string LinkMensagem(Guid mensagemId) => $"/comunicacoes/{mensagemId}";
+
     /// <returns>Quantidade de notificações criadas nesta execução.</returns>
     public async Task<int> Handle(IEventoDominio evento, CancellationToken ct = default)
     {
@@ -72,7 +75,7 @@ public sealed class GerarNotificacoesHandler(INotificacaoRepository notificacoes
                 var remetente = (await usuarios.ObterResumoAsync(m.RemetenteId, ct))?.Nome;
                 var tipo = Rotulos.De(m.Tipo);
                 return ($"Nova mensagem: {mensagem.Assunto}", remetente is null ? tipo : $"{remetente} · {tipo}",
-                    $"/comunicacoes/{m.MensagemId}");
+                    LinkMensagem(m.MensagemId));
             default:
                 throw new InvalidOperationException();
         }
@@ -90,7 +93,9 @@ public sealed class GerarNotificacoesHandler(INotificacaoRepository notificacoes
             await usuarios.ListarAtivosPorPerfilAsync(Perfis.CoordenadorCurso, c.CursoId, ct),
         RetornoEncaminhamentoRegistrado r when r.SolicitanteId != r.AutorId =>
             await usuarios.EstaAtivoAsync(r.SolicitanteId, ct) ? [r.SolicitanteId] : [],
-        MensagemEnviada m => await usuarios.EstaAtivoAsync(m.DestinatarioId, ct) ? [m.DestinatarioId] : [],
+        // Lida antes de a outbox rodar: a notificação "Nova mensagem" nasceria não lida para algo já visto.
+        MensagemEnviada m => await mensagens.ObterAsync(m.MensagemId, ct) is { LidaEm: null }
+            && await usuarios.EstaAtivoAsync(m.DestinatarioId, ct) ? [m.DestinatarioId] : [],
         _ => [],
     };
 }

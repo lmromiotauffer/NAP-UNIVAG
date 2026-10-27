@@ -17,6 +17,7 @@ public class MensagemOutbox
     public string Conteudo { get; private set; } = null!;
     public DateTimeOffset OcorridoEm { get; private set; }
     public DateTimeOffset? ProcessadoEm { get; private set; }
+    /// <summary>Tentativas iniciadas (contadas na reserva), com ou sem falha.</summary>
     public int Tentativas { get; private set; }
     public DateTimeOffset? ProximaTentativaEm { get; private set; }
     public string? UltimoErro { get; private set; }
@@ -33,10 +34,9 @@ public class MensagemOutbox
 
     public void MarcarProcessada(DateTimeOffset agora) => ProcessadoEm = agora;
 
-    /// <summary>Backoff exponencial: 30 s × 2^(tentativas−1), teto de 1 h.</summary>
+    /// <summary>Backoff exponencial: 30 s × 2^(tentativas−1), teto de 1 h. A tentativa já foi contada na reserva.</summary>
     public void RegistrarFalha(string erro, DateTimeOffset agora)
     {
-        Tentativas++;
         UltimoErro = erro.Length > 2000 ? erro[..2000] : erro;
         var espera = TimeSpan.FromSeconds(30 * Math.Pow(2, Tentativas - 1));
         ProximaTentativaEm = agora + (espera < TimeSpan.FromHours(1) ? espera : TimeSpan.FromHours(1));

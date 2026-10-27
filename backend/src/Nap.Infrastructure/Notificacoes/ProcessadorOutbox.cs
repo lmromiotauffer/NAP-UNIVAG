@@ -13,13 +13,15 @@ using Nap.Infrastructure.Persistencia;
 
 namespace Nap.Infrastructure.Notificacoes;
 
-// ponytail: uma instância da API; com várias, travar linhas (UPDLOCK, READPAST)
 /// <summary>Entrega os eventos da outbox ao consumidor de notificações, com retentativa e backoff. De hora em hora,
-/// também apaga o que ninguém mais lê: refresh tokens expirados e chaves de idempotência antigas.</summary>
+/// também apaga o que ninguém mais lê: refresh tokens expirados, chaves de idempotência antigas e mensagens já entregues.
+/// Com várias instâncias da API, cada mensagem é reservada por uma só antes de processar.</summary>
 public sealed class ProcessadorOutbox(IServiceScopeFactory escopos, IRelogio relogio, IOptions<OpcoesOutbox> opcoes,
     ILogger<ProcessadorOutbox> logger) : BackgroundService
 {
     private const int Lote = 50;
+    /// <summary>Reserva de uma mensagem por uma instância; vencida (processo morreu no meio), outra pode pegar.</summary>
+    private static readonly TimeSpan Reserva = TimeSpan.FromMinutes(2);
     private static readonly TimeSpan IntervaloPurga = TimeSpan.FromHours(1);
     private DateTimeOffset _proximaPurga;
 
@@ -74,7 +76,8 @@ public sealed class ProcessadorOutbox(IServiceScopeFactory escopos, IRelogio rel
 
     /// <summary>
     /// Refresh tokens expirados há mais de 7 dias (antes disso um sucessor da mesma família ainda pode estar vivo, e
-    /// reapresentar o antigo precisa revogá-la) e chaves de idempotência com mais de 1 dia (a repetição vem em segundos).
+    /// reapresentar o antigo precisa revogá-la), chaves de idempotência com mais de 1 dia (a repetição vem em segundos) e
+    /// mensagens da outbox entregues há mais de 30 dias (as desistidas ficam para diagnóstico).
     /// </summary>
     /// <returns>Linhas apagadas.</returns>
     public async Task<int> PurgarAsync(CancellationToken ct)
@@ -83,7 +86,8 @@ public sealed class ProcessadorOutbox(IServiceScopeFactory escopos, IRelogio rel
         await using var escopo = escopos.CreateAsyncScope();
         var db = escopo.ServiceProvider.GetRequiredService<NapDbContext>();
         return await db.TokensRefresh.Where(t => t.ExpiraEm < agora.AddDays(-7)).ExecuteDeleteAsync(ct)
-            + await db.ChavesIdempotencia.Where(c => c.CriadaEm < agora.AddDays(-1)).ExecuteDeleteAsync(ct);
+            + await db.ChavesIdempotencia.Where(c => c.CriadaEm < agora.AddDays(-1)).ExecuteDeleteAsync(ct)
+            + await db.Outbox.Where(m => m.ProcessadoEm < agora.AddDays(-30)).ExecuteDeleteAsync(ct);
     }
 
     // Um escopo por mensagem: a falha de uma não deixa entidades rastreadas para a próxima.
@@ -91,6 +95,13 @@ public sealed class ProcessadorOutbox(IServiceScopeFactory escopos, IRelogio rel
     {
         await using var escopo = escopos.CreateAsyncScope();
         var db = escopo.ServiceProvider.GetRequiredService<NapDbContext>();
+        var agora = relogio.Agora;
+        // Reserva atômica: de duas instâncias que listaram a mesma mensagem, só uma atualiza a linha e segue. A tentativa conta
+        // já aqui: uma mensagem que derruba o processo (nada gravado no catch) também chega ao máximo em vez de voltar para sempre.
+        var reservada = await db.Outbox
+            .Where(m => m.Id == id && m.ProcessadoEm == null && (m.ProximaTentativaEm == null || m.ProximaTentativaEm <= agora))
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.ProximaTentativaEm, agora + Reserva).SetProperty(m => m.Tentativas, m => m.Tentativas + 1), ct);
+        if (reservada == 0) return;
         var mensagem = await db.Outbox.SingleAsync(m => m.Id == id, ct);
         try
         {

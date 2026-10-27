@@ -40,8 +40,8 @@ public class Encaminhamento : AgregadoComEventos
             Especialidade = especialidade,
             Destino = destino,
             DataEncaminhamento = ValidarData(data, null, hoje, "do encaminhamento"),
-            MotivoRestrito = ValidarTexto(motivoRestrito, 3, 4000, "O motivo restrito"),
-            ResumoCompartilhavel = ValidarTexto(resumoCompartilhavel, 3, 2000, "O resumo compartilhável"),
+            MotivoRestrito = Texto.Validar(motivoRestrito, 3, 4000, "O motivo restrito"),
+            ResumoCompartilhavel = Texto.Validar(resumoCompartilhavel, 3, 2000, "O resumo compartilhável"),
             Observacoes = ValidarObservacoes(observacoes, "As observações"),
             Estado = EstadoEncaminhamento.Encaminhado,
             CriadoEm = agora,
@@ -75,7 +75,7 @@ public class Encaminhamento : AgregadoComEventos
                 Aplicar(acao, EstadoEncaminhamento.EmAtendimento, inicio, textoInicio, autorId, agora);
                 break;
             case AcaoRetorno.Evolucao:
-                Aplicar(acao, Estado, null, ValidarTexto(texto, 1, 4000, "O texto da evolução"), autorId, agora);
+                Aplicar(acao, Estado, null, Texto.Validar(texto, 1, 4000, "O texto da evolução"), autorId, agora);
                 break;
             case AcaoRetorno.Alta:
                 ExigirEstado(EstadoEncaminhamento.EmAtendimento, "A alta exige que o atendimento já tenha sido iniciado.");
@@ -87,7 +87,7 @@ public class Encaminhamento : AgregadoComEventos
             case AcaoRetorno.Desistencia:
                 var minima = new[] { DataEncaminhamento, DataAcolhimento ?? default, DataPrimeiroAtendimento ?? default }.Max();
                 var desistencia = ValidarData(data, minima, hoje, "da desistência");
-                var justificativa = ValidarTexto(texto, 3, 1000, "A justificativa");
+                var justificativa = Texto.Validar(texto, 3, 1000, "A justificativa");
                 DataEncerramento = desistencia;
                 Aplicar(acao, EstadoEncaminhamento.Desistencia, desistencia, justificativa, autorId, agora);
                 break;
@@ -97,7 +97,7 @@ public class Encaminhamento : AgregadoComEventos
     public void Cancelar(string justificativa, Guid autorId, DateOnly hoje, DateTimeOffset agora)
     {
         ExigirAberto();
-        var texto = ValidarTexto(justificativa, 3, 1000, "A justificativa");
+        var texto = Texto.Validar(justificativa, 3, 1000, "A justificativa");
         DataEncerramento = hoje;
         Aplicar(AcaoRetorno.Cancelamento, EstadoEncaminhamento.Cancelado, hoje, texto, autorId, agora);
     }
@@ -131,18 +131,10 @@ public class Encaminhamento : AgregadoComEventos
         return data.Value;
     }
 
-    private static string ValidarTexto(string? texto, int minimo, int maximo, string nome)
-    {
-        texto = (texto ?? string.Empty).Trim();
-        if (texto.Length < minimo || texto.Length > maximo)
-            throw new DomainException($"{nome} deve ter de {minimo} a {maximo} caracteres.");
-        return texto;
-    }
-
     private static string? ValidarObservacoes(string? texto, string nome)
     {
         texto = texto?.Trim();
         if (string.IsNullOrEmpty(texto)) return null;
-        return ValidarTexto(texto, 1, 4000, nome);
+        return Texto.Validar(texto, 1, 4000, nome);
     }
 }

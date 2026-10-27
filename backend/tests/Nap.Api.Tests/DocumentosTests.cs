@@ -154,14 +154,29 @@ public class DocumentosTests(ApiFactory fabrica)
     }
 
     [Fact]
-    public async Task Coordenador_curso_recebe_403_no_upload_e_na_escrita()
+    public async Task Coordenador_curso_anexa_no_proprio_curso_ja_compartilhado_e_404_em_outro_curso()
+    {
+        var (ana, alunoDireito) = await CenarioAsync();
+        var cursos = await ana.GetFromJsonAsync<JsonElement>("/api/cursos");
+        var outroCurso = cursos.EnumerateArray().First(c => c.GetProperty("nome").GetString() != "Direito").GetProperty("nome").GetString();
+        var (_, alunoOutro) = await CenarioAsync(outroCurso!);
+        var coord = await fabrica.ClienteComo("coord.direito@nap.demo");
+
+        var id = await AnexarAsync(coord, alunoDireito);
+        var doc = await coord.GetFromJsonAsync<JsonElement>($"/api/documentos/{id}");
+        Assert.Equal("CompartilhadoCoordenacao", doc.GetProperty("visibilidade").GetString());
+        Assert.Equal(HttpStatusCode.OK, (await ana.GetAsync($"/api/documentos/{id}/arquivo")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await coord.PostAsync($"/api/alunos/{alunoOutro}/documentos", Formulario(Pdf, "laudo.pdf"))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Coordenador_curso_recebe_403_na_escrita()
     {
         var (ana, alunoId) = await CenarioAsync();
         var id = await AnexarAsync(ana, alunoId);
         var coord = await fabrica.ClienteComo("coord.direito@nap.demo");
 
-        Assert.Equal(HttpStatusCode.Forbidden,
-            (await coord.PostAsync($"/api/alunos/{alunoId}/documentos", Formulario(Pdf, "laudo.pdf"))).StatusCode);
         var req = new HttpRequestMessage(HttpMethod.Post, $"/api/documentos/{id}/arquivar")
         {
             Content = JsonContent.Create(new { motivo = "Tentativa indevida" }),

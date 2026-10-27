@@ -164,7 +164,9 @@ public class GestaoUsuariosTests(SqlServerFixture sql, RedisFixture redis) : IAs
 
         var versao = (await ObterAsync(id)).Versao;
         await NaPortaAsync(p => p.AlterarSituacaoAsync(id, true, versao, Ct), ("usuario.situacao", id));
-        Assert.Null(await DesativadoEmAsync(id));
+        // Reativar preserva o período de inatividade: a produção lê [DesativadoEm, ReativadoEm).
+        Assert.Equal(SqlServerFixture.Relogio().Hoje, await DesativadoEmAsync(id));
+        Assert.Equal(SqlServerFixture.Relogio().Hoje, await ReativadoEmAsync(id));
     }
 
     [Fact]
@@ -179,6 +181,12 @@ public class GestaoUsuariosTests(SqlServerFixture sql, RedisFixture redis) : IAs
     {
         await using var db = sql.CriarContexto();
         return await db.Users.Where(u => u.Id == id).Select(u => u.DesativadoEm).SingleAsync(Ct);
+    }
+
+    private async Task<DateOnly?> ReativadoEmAsync(Guid id)
+    {
+        await using var db = sql.CriarContexto();
+        return await db.Users.Where(u => u.Id == id).Select(u => u.ReativadoEm).SingleAsync(Ct);
     }
 
     [Fact]

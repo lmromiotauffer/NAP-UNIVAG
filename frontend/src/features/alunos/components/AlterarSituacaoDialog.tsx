@@ -57,7 +57,7 @@ export function AlterarSituacaoDialog({ aluno, aberto, aoFechar }: { aluno: Alun
       <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
         {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
         <p className="text-sm text-suave">
-          Situação atual: <strong className="font-semibold text-texto">{ROTULO_SITUACAO[aluno.situacao]}</strong>
+          Situação atual: <strong className="font-semibold text-texto">{aluno.situacao ? ROTULO_SITUACAO[aluno.situacao] : "—"}</strong>
         </p>
         <Field rotulo="Nova situação" erro={errors.situacao?.message} obrigatorio>
           <Select defaultValue="" {...register("situacao")}>
@@ -76,7 +76,7 @@ export function AlterarSituacaoDialog({ aluno, aberto, aoFechar }: { aluno: Alun
         </Field>
         <div className="flex flex-wrap justify-end gap-2">
           <Button variante="secundaria" onClick={fechar} disabled={isSubmitting}>
-            Cancelar
+            Voltar
           </Button>
           <Button type="submit" carregando={isSubmitting}>
             Alterar situação

@@ -8,8 +8,11 @@ export const td = "px-4 py-2 align-middle";
 // Linha de listagem com ação ("Abrir ficha", "Abrir"): realce suave ao passar o mouse, com transição curta.
 export const trClicavel = "relative border-b border-borda text-corpo transition-colors duration-150 hover:bg-realce";
 export const soMedio = "hidden sm:table-cell";
+export const soLargo = "hidden lg:table-cell";
+// Ação "Abrir" da linha: o pseudo-elemento cobre a linha inteira (trClicavel é relative), então o cursor da linha é o do botão.
+export const classeAbrirLinha = "inline-flex cursor-pointer items-center gap-1 rounded-sm text-xs font-semibold whitespace-nowrap text-primaria after:absolute after:inset-0 after:content-['']";
 // Moldura das listagens: a tabela (e sua paginação) dentro de uma seção arredondada.
-export const classeMolduraTabela = "overflow-hidden rounded-secao border border-borda bg-superficie";
+const classeMolduraTabela = "overflow-hidden rounded-secao border border-borda bg-superficie";
 // Lista de página inteira: no desktop ocupa o resto da viewport e, se a tabela não couber, só ela rola (paginação sempre visível).
 export const classeMolduraRolavel = `${classeMolduraTabela} md:flex md:min-h-0 md:flex-1 md:flex-col`;
 

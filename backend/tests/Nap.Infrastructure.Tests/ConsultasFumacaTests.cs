@@ -27,7 +27,7 @@ public class ConsultasFumacaTests(SqlServerFixture fx)
                 Atendimento.RegistrarAvulso(aluno.Id, prof, IntervaloHorario.Criar(inicio, inicio.AddMinutes(45)), TipoAtendimento.Acompanhamento,
                     EstadoAtendimento.Realizado, new DadosClinicos("Demanda", "Privado", null, null), "Justificativa avulso", prof, agora),
                 Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião", IntervaloHorario.Criar(inicio.AddHours(2), inicio.AddHours(3)),
-                    prof, null, null, prof, agora));
+                    prof, null, null, prof));
             await db.SaveChangesAsync(ct);
         }
 

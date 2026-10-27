@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, ClipboardList } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "../../../components/ui/Button";
 import { Badge } from "../../../components/ui/Badge";
@@ -6,7 +6,7 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Paginacao } from "../../../components/ui/Paginacao";
 import { Skeleton } from "../../../components/ui/Skeleton";
-import { Table, th, td, soMedio, trClicavel } from "../../../components/ui/Table";
+import { Table, classeAbrirLinha, th, td, soLargo, soMedio, trClicavel } from "../../../components/ui/Table";
 import { cn } from "../../../lib/cn";
 import { formatarData, formatarDuracao, formatarHora } from "../../../lib/format";
 import { estiloAtendimento, ROTULO_TIPO_ATENDIMENTO } from "../../agenda/components/estiloCompromisso";
@@ -29,13 +29,14 @@ export function ListaAtendimentos({
   /** Na ficha do aluno a coluna Aluno é redundante. */
   semAluno?: boolean;
   /** Estado vazio sem filtro (e com ação), ex.: "Registrar atendimento". */
-  vazio: { titulo: string; descricao: string; acao?: ReactNode; acaoFiltro?: ReactNode; icone?: ReactNode };
+  vazio: { titulo: string; descricao: string; acao?: ReactNode; acaoFiltro?: ReactNode };
   aoMudarPagina: (pagina: number) => void;
   aoAbrir: (id: string) => void;
 }) {
   const lista = useListaAtendimentos(filtro);
+  const icone = <ClipboardList />;
   // Esqueleto espelha as colunas visíveis em cada largura.
-  const colunas = [soMedio, ...(semAluno ? [] : [soMedio]), "", "hidden lg:table-cell", soMedio, ""];
+  const colunas = [soMedio, ...(semAluno ? [] : [soMedio]), "", soLargo, soMedio, ""];
 
   if (lista.isError && !lista.data)
     return (
@@ -45,15 +46,15 @@ export function ListaAtendimentos({
     );
   if (lista.data && lista.data.total === 0 && !lista.isPlaceholderData)
     return comFiltro ? (
-      <EmptyState icone={vazio.icone} titulo="Nenhum atendimento corresponde aos filtros" descricao="Revise os filtros selecionados." acao={vazio.acaoFiltro} />
+      <EmptyState icone={icone} titulo="Nenhum atendimento corresponde aos filtros" descricao="Revise os filtros selecionados." acao={vazio.acaoFiltro} />
     ) : (
-      <EmptyState icone={vazio.icone} titulo={vazio.titulo} descricao={vazio.descricao} acao={vazio.acao} />
+      <EmptyState icone={icone} titulo={vazio.titulo} descricao={vazio.descricao} acao={vazio.acao} />
     );
   if (lista.data && lista.data.itens.length === 0 && !lista.isPlaceholderData)
     // Link antigo com `pagina` além da última: sem a Paginacao montada, este botão é o único caminho de volta.
     return (
       <EmptyState
-        icone={vazio.icone}
+        icone={icone}
         titulo="Esta página não tem atendimentos"
         descricao={`A lista tem ${lista.data.total} ${lista.data.total === 1 ? "atendimento" : "atendimentos"}.`}
         acao={
@@ -76,7 +77,7 @@ export function ListaAtendimentos({
               <span className="sm:hidden">Atendimento</span>
               <span className="max-sm:hidden">Tipo · demanda</span>
             </th>
-            <th scope="col" className={cn(th, "hidden lg:table-cell")}>Profissional · duração</th>
+            <th scope="col" className={cn(th, soLargo)}>Profissional · duração</th>
             <th scope="col" className={cn(th, soMedio)}>Estado</th>
             <th scope="col" className={th}>
               <span className="sr-only">Ações</span>
@@ -127,7 +128,7 @@ export function ListaAtendimentos({
                         type="button"
                         onClick={() => aoAbrir(a.id)}
                         aria-label={`Abrir atendimento de ${a.aluno} em ${formatarData(a.inicio)}`}
-                        className="inline-flex items-center gap-1 rounded-sm text-xs font-semibold whitespace-nowrap text-primaria after:absolute after:inset-0 after:content-['']"
+                        className={classeAbrirLinha}
                       >
                         {/* O ::after estende o botão à linha toda: o alvo de toque deixa de ser só a seta. */}
                         <span className="hidden lg:inline">Abrir</span>
@@ -156,7 +157,7 @@ export function ListaAtendimentos({
       )}
       {lista.isError && (
         <div className="p-4">
-          <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} />
+          <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} className="animate-surgir" />
         </div>
       )}
     </>

@@ -12,8 +12,9 @@ export function RotaProtegida({ children }: { children: ReactNode }) {
     return (
       <Carregando rotulo="Carregando sessão" className="flex min-h-dvh bg-fundo">
         <Skeleton className="hidden h-dvh w-28 rounded-none md:block" />
-        <div className="flex flex-1 flex-col gap-4 p-6">
-          <Skeleton className="h-8 w-72" />
+        {/* Mesmo recuo do <main> do AppShell: o conteúdo real chega no lugar do skeleton sem saltar. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-[18px] px-4 pt-5 sm:px-[clamp(16px,3vw,32px)]">
+          <Skeleton className="h-8 w-72 max-w-full" />
           <Skeleton className="h-28 w-full" />
           <Skeleton className="h-64 w-full" />
         </div>

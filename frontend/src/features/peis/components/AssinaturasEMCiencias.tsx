@@ -1,10 +1,15 @@
+import { useState } from "react";
 import { Badge } from "../../../components/ui/Badge";
 import { classeSecao } from "../../../components/ui/Card";
+import { cn } from "../../../lib/cn";
 import { formatarDataHora } from "../../../lib/format";
 import type { VersaoPeiDetalhe } from "../../../lib/types";
 import { AVISO_ASSINATURA, ROTULO_PAPEL } from "../rotulos";
 
 export function AssinaturasEMCiencias({ versao }: { versao: VersaoPeiDetalhe }) {
+  // Só a assinatura ou ciência registrada depois da montagem chega animada: na abertura a seção já vem com o surgir do <main>.
+  const [assinaturasIniciais] = useState(versao.assinaturas.length);
+  const [cienciasIniciais] = useState(versao.ciencias.length);
   return (
     <>
       <section aria-labelledby="titulo-assinaturas" className={classeSecao}>
@@ -15,8 +20,8 @@ export function AssinaturasEMCiencias({ versao }: { versao: VersaoPeiDetalhe }) 
           <p className="m-0 text-denso text-suave">Nenhuma assinatura registrada ainda.</p>
         ) : (
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {versao.assinaturas.map((a) => (
-              <li key={`${a.papel}-${a.em}`} className="flex flex-col gap-0.5 text-corpo">
+            {versao.assinaturas.map((a, i) => (
+              <li key={`${a.papel}-${a.em}`} className={cn("flex flex-col gap-0.5 text-corpo", i >= assinaturasIniciais && "animate-surgir")}>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <Badge variante="realizado">{ROTULO_PAPEL[a.papel]}</Badge>
                   <strong className="font-semibold">{a.nome}</strong>
@@ -38,8 +43,8 @@ export function AssinaturasEMCiencias({ versao }: { versao: VersaoPeiDetalhe }) 
             <p className="m-0 text-denso text-suave">Nenhuma ciência registrada ainda.</p>
           ) : (
             <ul className="m-0 flex list-none flex-col gap-1 p-0 text-corpo">
-              {versao.ciencias.map((c) => (
-                <li key={`${c.coordenador}-${c.em}`}>
+              {versao.ciencias.map((c, i) => (
+                <li key={`${c.coordenador}-${c.em}`} className={cn(i >= cienciasIniciais && "animate-surgir")}>
                   {c.coordenador} · Ciência registrada em {formatarDataHora(c.em)}
                 </li>
               ))}

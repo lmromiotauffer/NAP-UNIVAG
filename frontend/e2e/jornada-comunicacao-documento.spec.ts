@@ -1,7 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { entrar, sair, tokenDe } from "./apoio";
-
-const diaCuiaba = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Cuiaba" }).format(d);
+import { hojeCivil, entrar, sair, tokenDe } from "./apoio";
 
 // PDF mínimo: o que a API valida é a assinatura "%PDF-".
 const PDF = Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n");
@@ -36,7 +34,7 @@ test("profissional compartilha um documento e escreve à coordenação, que resp
       matricula: `E2E-COM-${sufixo}`,
       cursoId: cursos.find((c) => c.nome === "Direito")?.id,
       semestre: 2,
-      inicioAcompanhamento: diaCuiaba(new Date()),
+      inicioAcompanhamento: hojeCivil(new Date()),
       profissionalResponsavelId: anaId,
     },
   });

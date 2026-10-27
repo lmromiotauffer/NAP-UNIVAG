@@ -9,12 +9,13 @@ import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { Textarea } from "../../../components/ui/Textarea";
 import { tratarErro } from "../../../lib/api";
-import { diaCivil, horaCivil, instanteCivil } from "../../../lib/format";
+import { diaCivil, hojeCivil, horaCivil, instanteCivil } from "../../../lib/format";
 import type { AtendimentoDetalhe } from "../../../lib/types";
 import { camposHorario, CAMPO_DA_API, ListasHorario } from "../../agenda/components/CompromissoForm";
 import { ROTULO_TIPO_ATENDIMENTO } from "../../agenda/components/estiloCompromisso";
 import { useCorrigirAtendimento } from "../hooks/useAtendimentos";
-import { CamposClinicos, EscolhaEstado, ehTipo, textoClinico, TIPOS_ATENDIMENTO } from "./AtendimentoForm";
+import { entre } from "../../../lib/entre";
+import { CamposClinicos, EscolhaEstado, textoClinico, TIPOS_ATENDIMENTO } from "./AtendimentoForm";
 
 const ESTADOS = ["Realizado", "Ausente", "Remarcado", "Cancelado"] as const;
 
@@ -34,7 +35,7 @@ function criarEsquema(exigeJustificativa: boolean) {
         .transform((v) => (v === "" ? null : v)),
     })
     .superRefine((v, ctx) => {
-      if (!ehTipo(v.tipo)) ctx.addIssue({ code: "custom", path: ["tipo"], message: "Selecione o tipo." });
+      if (!entre(TIPOS_ATENDIMENTO, v.tipo)) ctx.addIssue({ code: "custom", path: ["tipo"], message: "Selecione o tipo." });
       if (v.estado === "Realizado" && v.demandaPrincipal == null)
         ctx.addIssue({ code: "custom", path: ["demandaPrincipal"], message: "Informe a demanda principal." });
       if (v.fim <= v.inicio) ctx.addIssue({ code: "custom", path: ["fim"], message: "O horário de término deve ser posterior ao de início." });
@@ -100,14 +101,15 @@ export function CorrigirAtendimentoDialog({
 
   async function enviar(d: Saida) {
     setErroGeral(null);
-    if (!ehTipo(d.tipo)) return;
+    const tipo = entre(TIPOS_ATENDIMENTO, d.tipo);
+    if (!tipo) return;
     try {
       await corrigir.mutateAsync({
         id: atendimento.id,
         versao,
         body: {
           estado: d.estado,
-          tipo: d.tipo,
+          tipo,
           inicio: instanteCivil(d.data, d.inicio),
           fim: instanteCivil(d.data, d.fim),
           demandaPrincipal: d.demandaPrincipal,
@@ -125,10 +127,11 @@ export function CorrigirAtendimentoDialog({
   }
 
   return (
-    <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+    // animate-surgir: o formulário substitui o detalhe dentro do mesmo Modal, como um painel remontado.
+    <form noValidate onSubmit={handleSubmit(enviar)} className="flex animate-surgir flex-col gap-4">
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       {exigeJustificativa && (
-        <Field rotulo="Justificativa da correção" erro={errors.justificativa?.message} dica="Correções de outro profissional são justificadas e auditadas." obrigatorio>
+        <Field rotulo="Justificativa da correção" erro={errors.justificativa?.message} dica="Correções de outro profissional são justificadas e auditadas (de 5 a 500 caracteres)." obrigatorio>
           <Textarea {...register("justificativa")} />
         </Field>
       )}
@@ -146,7 +149,7 @@ export function CorrigirAtendimentoDialog({
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
         <Field rotulo="Data" erro={errors.data?.message} obrigatorio>
-          <Input type="date" {...register("data")} />
+          <Input type="date" max={hojeCivil()} {...register("data")} />
         </Field>
         <Field rotulo="Início" erro={errors.inicio?.message} obrigatorio>
           <Input inputMode="numeric" placeholder="00:00" list={`${idHorarios}-inicio`} autoComplete="off" {...register("inicio")} />

@@ -27,7 +27,7 @@ public class AgendaConcorrenciaTests(SqlServerFixture fx)
         var usuario = new UsuarioAtualTeste(profissionalId);
         var relogio = SqlServerFixture.Relogio();
         var handler = new CriarCompromissoHandler(new CriarCompromissoValidator(), new AgendaRepository(db), new AlunoRepository(db),
-            new UsuarioQueries(db), usuario, relogio, AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db), new CacheNulo(),
+            new UsuarioQueries(db), usuario, AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db), new CacheNulo(),
             Escala(db, relogio), new ServicoFechamento(new FechamentoRepository(db), relogio));
         return await handler.Handle(new CriarCompromissoCommand(alunoId is null ? TipoCompromisso.ReuniaoEquipe : TipoCompromisso.Atendimento,
             "Compromisso", inicio, fim, null, alunoId, null), TestContext.Current.CancellationToken);
@@ -81,7 +81,7 @@ public class AgendaConcorrenciaTests(SqlServerFixture fx)
             var usuario = new UsuarioAtualTeste(coord, Perfis.CoordenadorNap);
             var relogio = SqlServerFixture.Relogio();
             var handler = new CriarCompromissoHandler(new CriarCompromissoValidator(), new AgendaRepository(db), new AlunoRepository(db),
-                new UsuarioQueries(db), usuario, relogio, AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db), new CacheNulo(),
+                new UsuarioQueries(db), usuario, AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db), new CacheNulo(),
                 Escala(db, relogio), new ServicoFechamento(new FechamentoRepository(db), relogio));
             Guid[] participantes = [profs[i % 6], profs[(i + 1) % 6], profs[(i + 2) % 6]];
             return await handler.Handle(new CriarCompromissoCommand(TipoCompromisso.ReuniaoEquipe, "Reunião", Base, Base.AddHours(1),
@@ -114,7 +114,7 @@ public class AgendaConcorrenciaTests(SqlServerFixture fx)
             var usuario = new UsuarioAtualTeste(coord, Perfis.CoordenadorNap);
             var relogio = SqlServerFixture.Relogio();
             await new CriarCompromissoHandler(new CriarCompromissoValidator(), new AgendaRepository(db), new AlunoRepository(db),
-                new UsuarioQueries(db), usuario, relogio, AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db), new CacheNulo(),
+                new UsuarioQueries(db), usuario, AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db), new CacheNulo(),
                 Escala(db, relogio), new ServicoFechamento(new FechamentoRepository(db), relogio))
                 .Handle(new CriarCompromissoCommand(TipoCompromisso.ReuniaoEquipe, "Reunião", inicio, inicio.AddHours(1), null, null, null, profs), ct);
         }
@@ -150,7 +150,7 @@ public class AgendaConcorrenciaTests(SqlServerFixture fx)
             var relogio = SqlServerFixture.Relogio();
             var fechamento = new ServicoFechamento(new FechamentoRepository(db), relogio);
             if (grupoRemarca)
-                await new RemarcarCompromissoHandler(new RemarcarCompromissoValidator(), new AgendaRepository(db), usuario, relogio,
+                await new RemarcarCompromissoHandler(new RemarcarCompromissoValidator(), new AgendaRepository(db), usuario,
                     AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db), new CacheNulo(), Escala(db, relogio), fechamento)
                     .Handle(new RemarcarCompromissoCommand(outra.Id, inicio.AddHours(3), inicio.AddHours(4), versaoOutra, EscopoGrupo.Grupo), ct);
             else
@@ -161,7 +161,6 @@ public class AgendaConcorrenciaTests(SqlServerFixture fx)
         var tarefas = new[] { Individual(), Grupo() };
 
         // Espera as duas pararem na trava da irmã (ambas já leram o estado antigo); sem isso a ordem seria sorte.
-        // ponytail: sem confirmação de espera em 15 s o teste segue e falha pelo timeout da trava (10 s), nunca passa em falso.
         for (var i = 0; i < 150; i++)
         {
             await using var consulta = fx.CriarContexto();
@@ -228,7 +227,7 @@ public class AgendaConcorrenciaTests(SqlServerFixture fx)
         {
             var usuario = new UsuarioAtualTeste(prof);
             var relogio = SqlServerFixture.Relogio();
-            var handler = new RemarcarCompromissoHandler(new RemarcarCompromissoValidator(), new AgendaRepository(db), usuario, relogio,
+            var handler = new RemarcarCompromissoHandler(new RemarcarCompromissoValidator(), new AgendaRepository(db), usuario,
                 AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db), new CacheNulo(), Escala(db, relogio),
                 new ServicoFechamento(new FechamentoRepository(db), relogio));
             var inicio = Base.AddHours(2 + i * 2);
@@ -257,13 +256,13 @@ public class AgendaConcorrenciaTests(SqlServerFixture fx)
         var h2 = IntervaloHorario.Criar(Base.AddHours(2), Base.AddHours(3));
 
         // h1: compromisso concluído por atendimento (quem ocupa é o atendimento); h2: atendimento avulso; h3: lembrete.
-        var compromisso = Compromisso.Criar(TipoCompromisso.Atendimento, "Atendimento", h1, prof, aluno.Id, null, prof, agora);
+        var compromisso = Compromisso.Criar(TipoCompromisso.Atendimento, "Atendimento", h1, prof, aluno.Id, null, prof);
         var registro = Atendimento.RegistrarDeCompromisso(compromisso, TipoAtendimento.Acompanhamento, EstadoAtendimento.Realizado,
             new DadosClinicos("Demanda", null, null, null), prof, agora);
         var avulso = Atendimento.RegistrarAvulso(aluno.Id, prof, h2, TipoAtendimento.Acompanhamento, EstadoAtendimento.Ausente, null,
             "Justificativa avulso", prof, agora);
         var lembrete = Compromisso.Criar(TipoCompromisso.Lembrete, "Lembrete", IntervaloHorario.Criar(Base.AddHours(4), Base.AddHours(5)),
-            prof, null, null, prof, agora);
+            prof, null, null, prof);
         await using (var db = fx.CriarContexto())
         {
             db.AddRange(compromisso, registro, avulso, lembrete);

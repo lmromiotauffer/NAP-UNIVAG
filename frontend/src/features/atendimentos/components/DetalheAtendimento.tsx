@@ -11,15 +11,14 @@ import { ErrorState } from "../../../components/ui/ErrorState";
 import { Modal } from "../../../components/ui/Modal";
 import { Skeleton } from "../../../components/ui/Skeleton";
 import { useToast } from "../../../components/ui/Toast";
-import { formatarData, formatarDataHora, formatarDuracao, formatarHora } from "../../../lib/format";
+import { cn } from "../../../lib/cn";
+import { formatarData, formatarDataHora, formatarDuracao, formatarIntervalo } from "../../../lib/format";
 import { estiloAtendimento, ROTULO_TIPO_ATENDIMENTO } from "../../agenda/components/estiloCompromisso";
 import { useDetalheAtendimento } from "../hooks/useAtendimentos";
 import { ROTULO_PRIVADAS } from "./AtendimentoForm";
 import { CorrigirAtendimentoDialog } from "./CorrigirAtendimentoDialog";
 
-const Dado = (p: { rotulo: string; children: ReactNode }) => <DadoBase classeValor="whitespace-pre-line" {...p} />;
-
-const minutos = (inicio: string, fim: string) => Math.round((Date.parse(fim) - Date.parse(inicio)) / 60_000);
+const Dado = (p: { rotulo: string; children: ReactNode }) => <DadoBase classeValor="break-words whitespace-pre-line" {...p} />;
 
 /** Detalhe de um atendimento. A API audita a leitura: só montar quando o usuário abre o atendimento. */
 export function DetalheAtendimento({ id, aoFechar }: { id: string; aoFechar: () => void }) {
@@ -27,6 +26,11 @@ export function DetalheAtendimento({ id, aoFechar }: { id: string; aoFechar: () 
   const toast = useToast();
   const detalhe = useDetalheAtendimento(id);
   const [corrigindo, setCorrigindo] = useState(false);
+  const [voltouDaCorrecao, setVoltouDaCorrecao] = useState(false);
+  const fecharCorrecao = () => {
+    setCorrigindo(false);
+    setVoltouDaCorrecao(true);
+  };
   const a = detalhe.data;
   const podeCorrigir = !!a && !!usuario && pode(usuario, "atendimentos.corrigir") && (ehCoordenacao(usuario) || a.profissionalId === usuario.id);
 
@@ -46,10 +50,10 @@ export function DetalheAtendimento({ id, aoFechar }: { id: string; aoFechar: () 
       <CorrigirAtendimentoDialog
         atendimento={detalhe.data}
         usuarioId={usuario.id}
-        aoCancelar={() => setCorrigindo(false)}
+        aoCancelar={fecharCorrecao}
         aoConcluir={() => {
           toast.sucesso("Atendimento corrigido.");
-          setCorrigindo(false);
+          fecharCorrecao();
         }}
       />
     );
@@ -58,7 +62,8 @@ export function DetalheAtendimento({ id, aoFechar }: { id: string; aoFechar: () 
     const estilo = estiloAtendimento(d.estado);
     const clinicos = d.dadosClinicos;
     corpo = (
-      <div className="flex flex-col gap-4 text-sm">
+      // Surge só ao voltar do formulário (mesma troca de painel que o formulário faz); ao substituir o skeleton, apagaria e surgiria de novo.
+      <div className={cn("flex flex-col gap-4 text-sm", voltouDaCorrecao && "animate-surgir")}>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variante={estilo.variante}>{estilo.rotuloEstado}</Badge>
           <span className="text-suave">{ROTULO_TIPO_ATENDIMENTO[d.tipo]}</span>
@@ -66,15 +71,15 @@ export function DetalheAtendimento({ id, aoFechar }: { id: string; aoFechar: () 
         </div>
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Dado rotulo="Horário">
-            {formatarData(d.inicio)}, {formatarHora(d.inicio)}–{formatarHora(d.fim)} · {formatarDuracao(minutos(d.inicio, d.fim))}
+            {formatarData(d.inicio)}, {formatarIntervalo(d.inicio, d.fim)} · {formatarDuracao(d.duracaoMinutos)}
           </Dado>
           <Dado rotulo="Profissional">{d.profissional}</Dado>
           <Dado rotulo="Aluno">
-            <Link to={`/alunos/${d.alunoId}`} className="font-semibold text-primaria underline-offset-2 hover:underline">
+            <Link to={`/alunos/${d.alunoId}`} className="inline-flex items-center font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
               {d.aluno}
             </Link>
           </Dado>
-          {d.avulso && <Dado rotulo="Justificativa do avulso">{d.justificativaAvulso ?? "—"}</Dado>}
+          {d.avulso && <Dado rotulo="Justificativa do atendimento avulso">{d.justificativaAvulso ?? "—"}</Dado>}
         </dl>
         {d.estado === "Ausente" && !clinicos?.demandaPrincipal ? (
           <p className="m-0 text-suave">O aluno faltou. Ausência não exige demanda ou nota clínica.</p>
@@ -91,7 +96,7 @@ export function DetalheAtendimento({ id, aoFechar }: { id: string; aoFechar: () 
               <Lock aria-hidden="true" className="size-3.5" />
               Observações privadas · {ROTULO_PRIVADAS}
             </p>
-            <p className="m-0 whitespace-pre-line">{clinicos.observacoesPrivadas}</p>
+            <p className="m-0 break-words whitespace-pre-line">{clinicos.observacoesPrivadas}</p>
           </section>
         )}
         {d.correcoes.length > 0 && (
@@ -101,13 +106,12 @@ export function DetalheAtendimento({ id, aoFechar }: { id: string; aoFechar: () 
             </h3>
             <ol className="m-0 flex list-none flex-col gap-2 p-0">
               {d.correcoes.map((c) => (
-                <li key={c.em} className="rounded-md border border-borda px-3 py-2">
+                <li key={c.em} className="rounded-md border border-borda px-3 py-2 break-words">
                   <div className="font-medium">
                     {c.autor} · {formatarDataHora(c.em)}
                   </div>
                   <div className="text-suave">
-                    Antes: {estiloAtendimento(c.estadoAnterior).rotuloEstado} · {ROTULO_TIPO_ATENDIMENTO[c.tipoAnterior]} · {formatarData(c.inicioAnterior)}, {formatarHora(c.inicioAnterior)}–
-                    {formatarHora(c.fimAnterior)}. Depois: {estiloAtendimento(c.estadoNovo).rotuloEstado}.
+                    Antes: {estiloAtendimento(c.estadoAnterior).rotuloEstado} · {ROTULO_TIPO_ATENDIMENTO[c.tipoAnterior]} · {formatarData(c.inicioAnterior)}, {formatarIntervalo(c.inicioAnterior, c.fimAnterior)}. Depois: {estiloAtendimento(c.estadoNovo).rotuloEstado}.
                   </div>
                   {c.justificativa && <div>Justificativa: {c.justificativa}</div>}
                 </li>

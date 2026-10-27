@@ -2,9 +2,11 @@ using Nap.Application.Comum;
 using Nap.Application.Features.Agenda;
 using Nap.Application.Features.Agenda.Commands;
 using Nap.Application.Features.Agenda.Queries;
+using Nap.Application.Features.Producao;
 using Nap.Application.Tests.Fakes;
 using Nap.Domain.Agenda;
 using Nap.Domain.Comum;
+using Nap.Domain.Producao;
 
 namespace Nap.Application.Tests;
 
@@ -20,6 +22,7 @@ public class EscalaTests
     private readonly AuditoriaFalsa _auditoria = new();
     private readonly UnidadeDeTrabalhoFalsa _uow = new();
     private readonly UsuarioAtualFalso _coord = new(Perfis.CoordenadorNap);
+    private readonly FechamentoRepositoryEmMemoria _fechamentos = new();
 
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -32,10 +35,10 @@ public class EscalaTests
         new(dia, new TimeOnly(de, 0), new TimeOnly(ate, 0), sem);
 
     private CriarEscalaHandler Criar(IUsuarioAtual? u = null) =>
-        new(new CriarEscalaValidator(), _escalas, _agenda, new UsuarioQueriesFalso(_prof), u ?? _coord, _auditoria, _uow);
+        new(new CriarEscalaValidator(), _escalas, _agenda, new UsuarioQueriesFalso(_prof), u ?? _coord, _auditoria, _uow, new ServicoFechamento(_fechamentos, new RelogioFixo()));
 
     private AtualizarVigenciaEscalaHandler Atualizar() =>
-        new(new AtualizarVigenciaEscalaValidator(), _escalas, _agenda, _coord, _auditoria, _uow);
+        new(new AtualizarVigenciaEscalaValidator(), _escalas, _agenda, _coord, _auditoria, _uow, new ServicoFechamento(_fechamentos, new RelogioFixo()));
 
     private ObterEscalaSemanaHandler Semana(IUsuarioAtual? u = null) =>
         new(new ObterEscalaSemanaValidator(), _escalas, _feriados, u ?? new UsuarioAtualFalso(Perfis.ProfissionalNap), new RelogioFixo());
@@ -110,6 +113,36 @@ public class EscalaTests
 
         await Assert.ThrowsAsync<ValidationException>(() => Semana().Handle(new ObterEscalaSemanaQuery(Segunda.AddDays(1)), Ct));
         await Assert.ThrowsAsync<ForbiddenException>(() => Semana(new UsuarioAtualFalso(Perfis.Gestao)).Handle(new ObterEscalaSemanaQuery(Segunda), Ct));
+    }
+
+    [Fact]
+    public async Task Escala_nao_muda_semana_fechada()
+    {
+        var f = FechamentoSemanal.Criar(_prof, Segunda.AddDays(14));
+        f.Fechar(Guid.NewGuid(), DateTimeOffset.UtcNow, Segunda.AddDays(60));
+        _fechamentos.Adicionar(f);
+
+        var ex = await Assert.ThrowsAsync<DomainException>(() =>
+            Criar().Handle(new CriarEscalaCommand(_prof, Segunda, null, [Faixa(DayOfWeek.Monday)]), Ct));
+        Assert.Equal(ServicoFechamento.MensagemPeriodoFechado, ex.Message);
+
+        // Terminar antes da semana fechada passa; encurtar também; prolongar o fim para dentro dela, não.
+        var id = await Criar().Handle(new CriarEscalaCommand(_prof, Segunda, Segunda.AddDays(13), [Faixa(DayOfWeek.Monday)]), Ct);
+        await Atualizar().Handle(new AtualizarVigenciaEscalaCommand(id, Segunda.AddDays(6), "v"), Ct);
+        await Assert.ThrowsAsync<DomainException>(() => Atualizar().Handle(new AtualizarVigenciaEscalaCommand(id, null, "v"), Ct));
+    }
+
+    [Fact]
+    public async Task Encurtar_vigencia_atravessando_semana_fechada_e_recusado()
+    {
+        var id = await Criar().Handle(new CriarEscalaCommand(_prof, Segunda, Segunda.AddDays(20), [Faixa(DayOfWeek.Monday)]), Ct);
+        var f = FechamentoSemanal.Criar(_prof, Segunda.AddDays(14));
+        f.Fechar(Guid.NewGuid(), DateTimeOffset.UtcNow, Segunda.AddDays(60));
+        _fechamentos.Adicionar(f);
+
+        // Os dias +7..+20 perderiam a escala, e a semana +14 está fechada.
+        var ex = await Assert.ThrowsAsync<DomainException>(() => Atualizar().Handle(new AtualizarVigenciaEscalaCommand(id, Segunda.AddDays(6), "v"), Ct));
+        Assert.Equal(ServicoFechamento.MensagemPeriodoFechado, ex.Message);
     }
 
     [Fact]

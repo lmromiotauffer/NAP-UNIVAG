@@ -12,4 +12,6 @@ public sealed class MensagemRepositoryEmMemoria : IMensagemRepository
     public void Adicionar(Mensagem m) => Mensagens.Add(m);
 
     public void Remover(Mensagem m) => Mensagens.Remove(m);
+
+    public Task<bool> RecarregarAsync(Mensagem m, CancellationToken ct) => Task.FromResult(Mensagens.Contains(m));
 }

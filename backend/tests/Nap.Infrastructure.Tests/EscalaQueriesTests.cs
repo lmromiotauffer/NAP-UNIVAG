@@ -3,8 +3,10 @@ using Nap.Application.Comum;
 using Nap.Application.Features.Agenda;
 using Nap.Application.Features.Agenda.Commands;
 using Nap.Application.Features.Cursos.Commands;
+using Nap.Application.Features.Producao;
 using Nap.Domain.Agenda;
 using Nap.Domain.Atendimentos;
+using Nap.Domain.Atividades;
 using Nap.Domain.Comum;
 using Nap.Domain.Comum.ValueObjects;
 using Nap.Infrastructure.Persistencia;
@@ -84,7 +86,8 @@ public class EscalaQueriesTests(SqlServerFixture fx)
             var usuario = new UsuarioAtualTeste(Guid.NewGuid(), Perfis.CoordenadorNap);
             var relogio = SqlServerFixture.Relogio();
             var handler = new CriarEscalaHandler(new CriarEscalaValidator(), new EscalaRepository(db), new AgendaRepository(db),
-                new UsuarioQueries(db), usuario, AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db));
+                new UsuarioQueries(db), usuario, AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db),
+                new ServicoFechamento(new FechamentoRepository(db), relogio));
             return await handler.Handle(new CriarEscalaCommand(prof, segunda.AddDays(i), null,
                 [new FaixaEscalaInput(DayOfWeek.Monday, new TimeOnly(8, 0), new TimeOnly(12, 0), false)]), Ct);
         }, Ct)).ToList();
@@ -104,20 +107,25 @@ public class EscalaQueriesTests(SqlServerFixture fx)
         var aluno = await RoundTripTests.CriarAlunoAsync(fx, await fx.CriarCursoAsync(), prof);
         var dia = SegundaAleatoria().AddDays(2);
         Compromisso Novo(TipoCompromisso tipo, DateTimeOffset inicio) =>
-            Compromisso.Criar(tipo, tipo.ToString(), IntervaloHorario.Criar(inicio, inicio.AddMinutes(30)), prof, null, null, prof, DateTimeOffset.UtcNow);
+            Compromisso.Criar(tipo, tipo.ToString(), IntervaloHorario.Criar(inicio, inicio.AddMinutes(30)), prof, null, null, prof);
 
         var agendado = Novo(TipoCompromisso.ReuniaoEquipe, Em(dia, 23, 15)); // 03:15Z do dia seguinte: ainda é o dia em Cuiabá
         var lembrete = Novo(TipoCompromisso.Lembrete, Em(dia, 10));
         var cancelado = Novo(TipoCompromisso.Bloqueio, Em(dia, 11));
-        cancelado.Cancelar("Imprevisto", prof, DateTimeOffset.UtcNow);
+        cancelado.Cancelar("Imprevisto");
         var diaSeguinte = Novo(TipoCompromisso.ReuniaoEquipe, Em(dia.AddDays(1), 0, 15));
         var atendimento = Atendimento.RegistrarAvulso(aluno.Id, prof, IntervaloHorario.Criar(Em(dia, 9), Em(dia, 10)),
             TipoAtendimento.Acompanhamento, EstadoAtendimento.Ausente, new DadosClinicos("Sigiloso", "Privado", null, null),
             "Sem agenda", prof, Em(dia, 12));
+        var realizada = Novo(TipoCompromisso.ReuniaoEquipe, Em(dia, 13));
+        realizada.RegistrarRealizacao(IntervaloHorario.Criar(Em(dia, 13), Em(dia, 13, 30)), prof, Em(dia, 14));
+        var atividade = AtividadeCurso.RegistrarAvulsa(prof, IntervaloHorario.Criar(Em(dia, 14), Em(dia, 15)), null,
+            TipoAtividade.RodaConversa, "Roda de conversa", "Sem agenda", prof, Em(dia, 16));
         await using (var db = fx.CriarContexto())
         {
-            db.Compromissos.AddRange(agendado, lembrete, cancelado, diaSeguinte);
+            db.Compromissos.AddRange(agendado, lembrete, cancelado, diaSeguinte, realizada);
             db.Atendimentos.Add(atendimento);
+            db.AtividadesCurso.Add(atividade);
             await db.SaveChangesAsync(Ct);
         }
 
@@ -125,11 +133,13 @@ public class EscalaQueriesTests(SqlServerFixture fx)
         var usuario = new UsuarioAtualTeste(prof, Perfis.CoordenadorNap);
         var relogio = SqlServerFixture.Relogio();
         var handler = new CriarFeriadoHandler(new CriarFeriadoValidator(), new FeriadoRepository(escrita, relogio), usuario,
-            AuditoriaTeste.Criar(escrita, usuario, relogio), new UnidadeDeTrabalho(escrita));
+            AuditoriaTeste.Criar(escrita, usuario, relogio), new UnidadeDeTrabalho(escrita),
+            new ServicoFechamento(new FechamentoRepository(escrita), relogio));
         var criado = await handler.Handle(new CriarFeriadoCommand(dia, "Feriado municipal"), Ct);
 
         var meus = criado.Conflitos.Where(c => c.ProfissionalId == prof).ToList();
-        Assert.Equal([(atendimento.Id, "Atendimento"), (agendado.Id, "Compromisso")], meus.Select(c => (c.Id, c.Tipo)));
+        Assert.Equal([(atendimento.Id, "Atendimento"), (realizada.Id, "Realização"), (atividade.Id, "Atividade"), (agendado.Id, "Compromisso")],
+            meus.Select(c => (c.Id, c.Tipo)));
         Assert.All(meus, c => Assert.Equal("Profissional Feriado", c.Profissional));
         Assert.DoesNotContain(meus, c => c.Titulo.Contains("Sigiloso"));
 

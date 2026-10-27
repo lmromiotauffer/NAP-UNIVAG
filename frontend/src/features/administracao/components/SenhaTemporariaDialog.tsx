@@ -2,6 +2,7 @@ import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { Dado } from "../../../components/ui/Dado";
 import { Modal } from "../../../components/ui/Modal";
 
 /**
@@ -34,23 +35,18 @@ export function SenhaTemporariaDialog({ email, senha, aoFechar }: { email: strin
       <div className="flex flex-col gap-4">
         <Alert variante="aguardando">Entregue esta senha pessoalmente. Ela aparece só agora e precisará ser trocada no primeiro acesso.</Alert>
         <dl className="flex flex-col gap-3 text-sm">
-          <div>
-            <dt className="text-xs text-suave">E-mail</dt>
-            <dd className="break-all">{email}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-suave">Senha temporária</dt>
-            <dd className="flex items-center gap-2">
-              <code className="rounded-md bg-realce px-2.5 py-1.5 font-mono text-base tracking-wider select-all">{senha}</code>
-              <Button tamanho="sm" variante="secundaria" onClick={() => void copiar()}>
-                {copiada ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
-                {copiada ? "Copiada" : "Copiar"}
-              </Button>
-            </dd>
-          </div>
+          <Dado rotulo="E-mail">{email}</Dado>
+          {/* flex-wrap: em 320 px o botão desce de linha em vez de espremer a senha. */}
+          <Dado rotulo="Senha temporária" classeValor="flex flex-wrap items-center gap-2">
+            <code className="rounded-md bg-realce px-2.5 py-1.5 font-mono text-base tracking-wider select-all">{senha}</code>
+            <Button tamanho="sm" variante="secundaria" onClick={() => void copiar()}>
+              {copiada ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
+              {copiada ? "Copiada" : "Copiar"}
+            </Button>
+          </Dado>
         </dl>
         {falhouCopia && (
-          <p role="alert" className="text-xs text-urgente">
+          <p role="alert" className="animate-surgir text-xs text-urgente">
             Não foi possível copiar. Selecione a senha e copie manualmente.
           </p>
         )}

@@ -14,7 +14,7 @@ export function Paginacao({ pagina, tamanho, total, aoMudar }: { pagina: number;
   }, [pagina, ultima, total, aoMudar]);
   return (
     <nav aria-label="Paginação" className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm text-suave">
-      <span aria-live="polite">
+      <span aria-live="polite" className="tabular-nums">
         Mostrando {inicio}–{fim} de {total}
       </span>
       <div className="flex gap-2">

@@ -113,6 +113,28 @@ public class ComunicacoesTests(ApiFactory fabrica)
     }
 
     [Fact]
+    public async Task Caixa_filtra_por_encaminhamento()
+    {
+        var (ana, _, coordId, alunoId) = await CenarioAsync();
+        var criado = await ana.PostAsJsonAsync("/api/encaminhamentos", new
+        {
+            alunoId, especialidade = "Psicologia", destino = "ClinicaEscola",
+            data = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)).ToString("yyyy-MM-dd"),
+            motivoRestrito = "Motivo", resumoCompartilhavel = "Resumo",
+        });
+        var encaminhamentoId = await IdAsync(criado);
+        var vinculada = await IdAsync(await ana.PostAsJsonAsync("/api/comunicacoes", new
+        {
+            destinatarioId = coordId, tipo = "Aviso", assunto = "Sobre o encaminhamento", corpo = "Texto.", alunoId, encaminhamentoId,
+        }));
+        await IdAsync(await ana.PostAsJsonAsync("/api/comunicacoes", Mensagem(coordId, alunoId)));
+
+        var lista = await ana.GetFromJsonAsync<JsonElement>($"/api/comunicacoes?caixa=Enviados&encaminhamentoId={encaminhamentoId}");
+        Assert.Equal(1, lista.GetProperty("total").GetInt32());
+        Assert.Equal(vinculada, lista.GetProperty("itens")[0].GetProperty("id").GetGuid());
+    }
+
+    [Fact]
     public async Task Destinatario_invalido_retorna_400_no_campo()
     {
         var (ana, _, _, alunoId) = await CenarioAsync();

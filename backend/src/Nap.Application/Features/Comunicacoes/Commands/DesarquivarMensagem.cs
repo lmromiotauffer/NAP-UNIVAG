@@ -1,19 +1,22 @@
 using Nap.Application.Comum;
+using Nap.Application.Features.Alunos;
+using Nap.Application.Features.Encaminhamentos;
 
 namespace Nap.Application.Features.Comunicacoes.Commands;
 
 public record DesarquivarMensagemCommand(Guid Id);
 
-public sealed class DesarquivarMensagemHandler(IMensagemRepository mensagens, IUsuarioAtual usuario, IUnidadeDeTrabalho uow)
+public sealed class DesarquivarMensagemHandler(IMensagemRepository mensagens, IAlunoRepository alunos,
+    IEncaminhamentoRepository encaminhamentos, IUsuarioAtual usuario, IUnidadeDeTrabalho uow)
 {
     public async Task Handle(DesarquivarMensagemCommand comando, CancellationToken ct = default)
     {
         RegrasComunicacao.ExigirAcesso(usuario);
 
         var m = await mensagens.ObterAsync(comando.Id, ct);
-        if (m is null || !RegrasComunicacao.PodeVer(usuario, m)) throw new NotFoundException("Mensagem");
+        if (m is null || !await RegrasComunicacao.PodeVerHojeAsync(usuario, m, alunos, encaminhamentos, ct))
+            throw new NotFoundException("Mensagem");
 
-        m.Desarquivar(usuario.Id);
-        await uow.SalvarAsync(ct);
+        await RegrasComunicacao.SalvarRelendoSeConflitarAsync(mensagens, uow, m, () => m.Desarquivar(usuario.Id), ct);
     }
 }

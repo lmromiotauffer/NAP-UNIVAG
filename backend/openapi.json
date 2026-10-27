@@ -1573,6 +1573,16 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Muitas tentativas",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         },
         "security": [ ]
@@ -1629,6 +1639,16 @@
           },
           "422": {
             "description": "Regra de negócio violada",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Muitas tentativas",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3071,6 +3091,14 @@
             }
           },
           {
+            "name": "encaminhamentoId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
             "name": "pagina",
             "in": "query",
             "schema": {
@@ -3345,6 +3373,14 @@
           },
           {
             "name": "encaminhamentoId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "cursoId",
             "in": "query",
             "schema": {
               "type": "string",
@@ -6909,6 +6945,14 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -6957,6 +7001,16 @@
           },
           "409": {
             "description": "Conflito",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Versão do registro ausente",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7111,8 +7165,15 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "No Content"
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersaoAtualizadaDto"
+                }
+              }
+            }
           },
           "400": {
             "description": "Requisição inválida",
@@ -9628,6 +9689,7 @@
           "id",
           "nome",
           "matricula",
+          "matriculaAtiva",
           "cursoId",
           "curso",
           "semestre",
@@ -9652,26 +9714,48 @@
           "matricula": {
             "type": "string"
           },
+          "matriculaAtiva": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
           "cursoId": {
-            "type": "string",
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "uuid"
           },
           "curso": {
             "type": "string"
           },
           "semestre": {
-            "type": "integer",
+            "type": [
+              "null",
+              "integer"
+            ],
             "format": "int32"
           },
           "profissionalId": {
-            "type": "string",
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "uuid"
           },
           "profissional": {
             "type": "string"
           },
           "situacao": {
-            "$ref": "#/components/schemas/SituacaoAluno"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SituacaoAluno"
+              }
+            ]
           },
           "inicioAcompanhamento": {
             "type": "string",
@@ -9709,6 +9793,7 @@
           "id",
           "nome",
           "matricula",
+          "matriculaAtiva",
           "cursoId",
           "curso",
           "semestre",
@@ -9730,26 +9815,48 @@
           "matricula": {
             "type": "string"
           },
+          "matriculaAtiva": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
           "cursoId": {
-            "type": "string",
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "uuid"
           },
           "curso": {
             "type": "string"
           },
           "semestre": {
-            "type": "integer",
+            "type": [
+              "null",
+              "integer"
+            ],
             "format": "int32"
           },
           "profissionalId": {
-            "type": "string",
+            "type": [
+              "null",
+              "string"
+            ],
             "format": "uuid"
           },
           "profissional": {
             "type": "string"
           },
           "situacao": {
-            "$ref": "#/components/schemas/SituacaoAluno"
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SituacaoAluno"
+              }
+            ]
           },
           "totalAtendimentos": {
             "type": [
@@ -9890,6 +9997,7 @@
           "compromissoId",
           "inicio",
           "fim",
+          "duracaoMinutos",
           "alunoId",
           "aluno",
           "profissionalId",
@@ -9922,6 +10030,10 @@
           "fim": {
             "type": "string",
             "format": "date-time"
+          },
+          "duracaoMinutos": {
+            "type": "integer",
+            "format": "int32"
           },
           "alunoId": {
             "type": "string",
@@ -10320,7 +10432,8 @@
           "semestre",
           "necessidadesEducacionais",
           "observacoesAcademicas",
-          "profissionalResponsavelId"
+          "profissionalResponsavelId",
+          "matriculaAtiva"
         ],
         "type": "object",
         "properties": {
@@ -10346,6 +10459,9 @@
           "profissionalResponsavelId": {
             "type": "string",
             "format": "uuid"
+          },
+          "matriculaAtiva": {
+            "type": "boolean"
           }
         }
       },
@@ -11884,7 +12000,10 @@
             ]
           },
           "resumoCompartilhavel": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "observacoes": {
             "type": [
@@ -14439,6 +14558,17 @@
               "number"
             ],
             "format": "double"
+          }
+        }
+      },
+      "VersaoAtualizadaDto": {
+        "required": [
+          "versao"
+        ],
+        "type": "object",
+        "properties": {
+          "versao": {
+            "type": "string"
           }
         }
       },

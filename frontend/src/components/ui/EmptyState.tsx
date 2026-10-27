@@ -7,6 +7,7 @@ export function EmptyState({ titulo, descricao, acao, icone, nivel = "p" }: { ti
   const Titulo = nivel;
   return (
     // `flex-1 justify-center`: dentro de uma moldura que estica, o estado vazio fica no meio da altura sobrando.
+    // Sem animação de entrada: substitui um skeleton já visível; se começasse em opacidade 0 a área apagaria e surgiria de novo.
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 py-10 text-center">
       {icone && (
         <span aria-hidden="true" className={cn(classeIconeTitulo, "mb-1 size-12 rounded-2xl [&>svg]:size-6")}>

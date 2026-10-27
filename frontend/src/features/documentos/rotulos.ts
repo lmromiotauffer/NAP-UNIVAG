@@ -1,8 +1,8 @@
 import type { VarianteSemantica } from "../../components/ui/variantes";
 import type { components } from "../../lib/api-schema";
 
-export type CategoriaDocumento = components["schemas"]["CategoriaDocumento"];
-export type VisibilidadeDocumento = components["schemas"]["VisibilidadeDocumento"];
+type CategoriaDocumento = components["schemas"]["CategoriaDocumento"];
+type VisibilidadeDocumento = components["schemas"]["VisibilidadeDocumento"];
 
 export const ROTULO_CATEGORIA: Record<CategoriaDocumento, string> = {
   Laudo: "Laudo",

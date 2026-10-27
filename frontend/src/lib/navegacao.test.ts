@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { destinoSeguro } from "./LoginPage";
+import { destinoSeguro } from "./navegacao";
 
 describe("destinoSeguro", () => {
   it("voltar_so_aceita_caminho_relativo_da_propria_origem", () => {

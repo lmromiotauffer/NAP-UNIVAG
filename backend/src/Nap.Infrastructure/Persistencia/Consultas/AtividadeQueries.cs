@@ -64,7 +64,8 @@ public sealed class AtividadeQueries(NapDbContext db, IRelogio relogio) : IAtivi
             Profissional = db.Users.Where(u => u.Id == a.ProfissionalId).Select(u => u.NomeCompleto).FirstOrDefault() ?? "",
             a.Tipo, a.Descricao, a.JustificativaAvulso, a.CompromissoId,
             Versao = EF.Property<byte[]>(a, "Versao"),
-            Correcoes = a.Correcoes.OrderBy(c => c.Em).ThenBy(c => c.Id).Select(c => new CorrecaoAtividadeDto(
+            // Coordenação de curso: só as correções cujo estado anterior já era do próprio curso.
+            Correcoes = a.Correcoes.Where(c => cursoRecorte == null || c.CursoIdAnterior == cursoRecorte).OrderBy(c => c.Em).ThenBy(c => c.Id).Select(c => new CorrecaoAtividadeDto(
                 db.Users.Where(u => u.Id == c.AutorId).Select(u => u.NomeCompleto).FirstOrDefault() ?? "",
                 c.Em, c.Justificativa, c.InicioAnterior, c.FimAnterior, c.CursoIdAnterior,
                 db.Cursos.Where(x => x.Id == c.CursoIdAnterior).Select(x => x.Nome).FirstOrDefault(),
@@ -80,8 +81,6 @@ public sealed class AtividadeQueries(NapDbContext db, IRelogio relogio) : IAtivi
 
     private (DateOnly Data, Turno Turno, int Duracao) DataTurnoDuracao(DateTimeOffset inicio, DateTimeOffset fim)
     {
-        var local = TimeZoneInfo.ConvertTime(inicio, relogio.Fuso);
-        return (DateOnly.FromDateTime(local.DateTime), AtividadeCurso.TurnoDe(TimeOnly.FromDateTime(local.DateTime)),
-            (int)(fim - inicio).TotalMinutes);
+        return (relogio.Fuso.DataLocal(inicio), AtividadeCurso.TurnoDe(relogio.Fuso.HoraLocal(inicio)), (int)(fim - inicio).TotalMinutes);
     }
 }

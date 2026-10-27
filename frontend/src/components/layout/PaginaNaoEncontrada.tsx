@@ -12,7 +12,7 @@ export function PaginaNaoEncontrada() {
         titulo="Página não encontrada"
         descricao="O endereço não existe ou foi movido. Confira o link ou use o menu."
         acao={
-          <Link to="/" className="text-sm font-semibold text-primaria underline-offset-2 hover:underline">
+          <Link to="/" className="inline-flex items-center text-sm font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
             Ir para o painel
           </Link>
         }

@@ -86,7 +86,7 @@ public class FechamentoSemanalTests(SqlServerFixture fx)
         await using (var db = fx.CriarContexto())
         {
             db.Add(Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Sem desfecho", IntervaloHorario.Criar(Terca(8), Terca(9)),
-                prof, null, null, prof, Terca(7)));
+                prof, null, null, prof));
             await db.SaveChangesAsync(ct);
         }
 

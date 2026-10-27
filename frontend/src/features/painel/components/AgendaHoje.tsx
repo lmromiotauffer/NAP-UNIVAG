@@ -1,9 +1,8 @@
-import { ChevronRight } from "lucide-react";
 import { Link } from "react-router";
 import { Badge } from "../../../components/ui/Badge";
 import { Card } from "../../../components/ui/Card";
 import { cn } from "../../../lib/cn";
-import { formatarHora } from "../../../lib/format";
+import { formatarIntervalo } from "../../../lib/format";
 import type { Compromisso } from "../../../lib/types";
 import { estiloCompromisso } from "../../agenda/components/estiloCompromisso";
 
@@ -16,9 +15,8 @@ export function AgendaHoje({ titulo, compromissos, mostrarProfissional, agora, c
         <h2 id="titulo-hoje" className="m-0 font-titulo text-destaque font-bold">
           {titulo}
         </h2>
-        <Link to="/agenda" aria-label="Abrir agenda" className="inline-flex items-center gap-0.5 rounded-sm pointer-coarse:min-h-11 text-xs font-semibold text-primaria underline-offset-2 hover:underline">
-          Agenda
-          <ChevronRight aria-hidden="true" className="size-3.5" />
+        <Link to="/agenda" className="inline-flex items-center rounded-sm text-xs font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
+          Ver agenda
         </Link>
       </div>
       {ordenados.length === 0 ? (
@@ -32,7 +30,7 @@ export function AgendaHoje({ titulo, compromissos, mostrarProfissional, agora, c
               <li key={c.id} className={cn("flex min-w-0 flex-col gap-1 rounded-xl bg-linha px-2.5 py-2", emCurso && "ring-2 ring-primaria")}>
                 <div className="flex items-center justify-between gap-2 text-xs text-suave tabular-nums">
                   <span>
-                    {formatarHora(c.inicio)}–{formatarHora(c.fim)}
+                    {formatarIntervalo(c.inicio, c.fim)}
                   </span>
                   {emCurso ? <Badge variante="info">Agora</Badge> : <Badge variante={estilo.variante}>{estilo.rotuloEstado}</Badge>}
                 </div>

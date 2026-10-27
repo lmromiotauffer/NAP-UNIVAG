@@ -52,7 +52,7 @@ export function useAcaoVersao() {
         case "ciencia":
           return peiService.ciencia(id);
         case "descartar":
-          return peiService.descartar(id);
+          return peiService.descartar(id, versao);
         default:
           return peiService[acao](id, versao);
       }

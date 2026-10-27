@@ -1,5 +1,6 @@
 using FluentValidation;
 using Nap.Application.Comum;
+using Nap.Application.Features.Producao;
 using Nap.Application.Features.Usuarios;
 using Nap.Domain.Agenda;
 
@@ -21,7 +22,7 @@ public class CriarFeriadoValidator : AbstractValidator<CriarFeriadoCommand>
 
 /// <summary>Só cadastra: o que já ocupa a data volta em <c>Conflitos</c> para a coordenação decidir; nada é alterado.</summary>
 public sealed class CriarFeriadoHandler(IValidator<CriarFeriadoCommand> validador, IFeriadoRepository feriados,
-    IUsuarioAtual usuario, IAuditoria auditoria, IUnidadeDeTrabalho uow)
+    IUsuarioAtual usuario, IAuditoria auditoria, IUnidadeDeTrabalho uow, ServicoFechamento fechamento)
 {
     public const string MensagemDuplicado = "Já existe um feriado nesta data.";
 
@@ -32,12 +33,12 @@ public sealed class CriarFeriadoHandler(IValidator<CriarFeriadoCommand> validado
         if (await feriados.ObterAtivoAsync(comando.Data, ct) is not null)
             throw new ConflictException(MensagemDuplicado);
 
-        // ponytail: criar feriado não toma os locks da agenda; um compromisso confirmado em paralelo pode faltar na
         // lista de conflitos devolvida. Nada é apagado e a agenda segue destacando o feriado.
         // Evolução: BloquearAgendasAsync para todos os profissionais.
         var feriado = Feriado.Criar(comando.Data, comando.Descricao);
         return await uow.EmTransacaoAsync(async tct =>
         {
+            await fechamento.ExigirPeriodoAbertoAsync(null, feriado.Data, feriado.Data, tct);
             feriados.Adicionar(feriado);
             auditoria.Registrar("feriado.criar", "Feriado", feriado.Id);
             await uow.SalvarAsync(tct);

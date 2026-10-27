@@ -48,6 +48,28 @@ public class AutorizacaoForaEscalaTests(ApiFactory fabrica)
     }
 
     [Fact]
+    public async Task Revogacoes_simultaneas_revogam_uma_vez_so()
+    {
+        var coordenacao = await fabrica.ClienteComo("coordenacao@nap.demo");
+        var anaId = await ApiFactory.IdDoUsuarioAsync(await fabrica.ClienteComo("ana.beatriz@nap.demo"));
+        var inicio = DiaAleatorio();
+        var criada = await coordenacao.PostAsJsonAsync("/api/escalas/autorizacoes",
+            new { profissionalId = anaId, inicio, fim = inicio.AddHours(3), justificativa = "Plantão do vestibular" });
+        var id = (await criada.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        var respostas = await Task.WhenAll(Enumerable.Range(0, 4)
+            .Select(_ => coordenacao.PostAsync($"/api/escalas/autorizacoes/{id}/revogar", null)));
+
+        Assert.Single(respostas, r => r.StatusCode == HttpStatusCode.NoContent);
+        Assert.All(respostas.Where(r => r.StatusCode != HttpStatusCode.NoContent),
+            r => Assert.Equal(HttpStatusCode.UnprocessableEntity, r.StatusCode));
+        await using var escopo = fabrica.Services.CreateAsyncScope();
+        Assert.Equal(1, await escopo.ServiceProvider.GetRequiredService<NapDbContext>().EventosAuditoria.AsNoTracking()
+            .CountAsync(e => e.RecursoId == id && e.Acao == "escala.autorizacao.revogar" && e.Resultado == "sucesso",
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task Justificativa_curta_retorna_400()
     {
         var coordenacao = await fabrica.ClienteComo("coordenacao@nap.demo");

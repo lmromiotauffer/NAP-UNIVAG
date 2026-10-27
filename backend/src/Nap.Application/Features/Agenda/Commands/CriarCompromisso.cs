@@ -23,8 +23,7 @@ public class CriarCompromissoValidator : AbstractValidator<CriarCompromissoComma
         RuleFor(x => x.Tipo).IsInEnum();
         RuleFor(x => x.Titulo).NotEmpty().WithMessage("Informe o título.").MaximumLength(120);
         RuleFor(x => x.Descricao).MaximumLength(2000);
-        RuleFor(x => x.Fim).GreaterThan(x => x.Inicio).WithMessage("O horário de término deve ser posterior ao de início.")
-            .Must((x, fim) => fim - x.Inicio <= TimeSpan.FromHours(12)).WithMessage("A duração não pode ultrapassar 12 horas.");
+        RuleFor(x => x.Fim).IntervaloValido(x => x.Inicio);
         When(x => x.EhGrupo, () =>
         {
             RuleFor(x => x.ParticipantesIds)
@@ -37,7 +36,7 @@ public class CriarCompromissoValidator : AbstractValidator<CriarCompromissoComma
 }
 
 public sealed class CriarCompromissoHandler(IValidator<CriarCompromissoCommand> validador, IAgendaRepository agenda,
-    IAlunoRepository alunos, IUsuarioQueries usuarios, IUsuarioAtual usuario, IRelogio relogio, IAuditoria auditoria,
+    IAlunoRepository alunos, IUsuarioQueries usuarios, IUsuarioAtual usuario, IAuditoria auditoria,
     IUnidadeDeTrabalho uow, ICacheConsultas cache, ServicoEscala escala,
     ServicoFechamento fechamento)
 {
@@ -53,11 +52,11 @@ public sealed class CriarCompromissoHandler(IValidator<CriarCompromissoCommand> 
 
         var intervalo = IntervaloHorario.Criar(comando.Inicio, comando.Fim);
         var compromisso = Compromisso.Criar(comando.Tipo, comando.Titulo, intervalo, profissionalId, comando.AlunoId,
-            comando.Descricao, usuario.Id, relogio.Agora);
+            comando.Descricao, usuario.Id);
 
         await uow.EmTransacaoAsync(async tct =>
         {
-            await fechamento.ExigirSemanaAbertaAsync(profissionalId, intervalo.Inicio, tct);
+            await fechamento.ExigirSemanaAbertaAsync(profissionalId, intervalo, tct);
             await agenda.GarantirSemConflitoAsync(profissionalId, comando.AlunoId, intervalo, null, comando.Tipo.OcupaHorario(), tct,
                 listarConflitos: comando.Tipo == TipoCompromisso.Bloqueio);
             // Sob a trava da agenda do profissional, que também serializa as gravações de escala dele.
@@ -86,14 +85,16 @@ public sealed class CriarCompromissoHandler(IValidator<CriarCompromissoCommand> 
         var intervalo = IntervaloHorario.Criar(comando.Inicio, comando.Fim);
         var grupoId = Guid.CreateVersion7();
         var instancias = participantes.Select(p => Compromisso.Criar(comando.Tipo, comando.Titulo, intervalo, p, null, comando.Descricao,
-            usuario.Id, relogio.Agora, grupoId)).ToList();
+            usuario.Id, grupoId)).ToList();
 
         await uow.EmTransacaoAsync(async tct =>
         {
             // Todas as travas de fechamento (em ordem) antes de todas as de agenda: intercalar por participante causa deadlock.
-            foreach (var p in participantes) await fechamento.ExigirSemanaAbertaAsync(p, intervalo.Inicio, tct);
+            foreach (var p in participantes) await fechamento.ExigirSemanaAbertaAsync(p, intervalo, tct);
             await agenda.GarantirGrupoSemConflitoAsync([.. participantes.Select(p => (p, (Guid?)null))], intervalo,
                 comando.Tipo.OcupaHorario(), tct);
+            // shortcut: escala e feriado são consultados por participante (até ~5 idas ao banco cada, 50 no máximo) com as travas
+            // presas; se a criação do grupo ficar lenta, carregar feriado, autorizações e escalas de todos numa consulta só.
             if (comando.Tipo.SegueEscala())
                 foreach (var p in participantes) await escala.ExigirDentroDaEscalaAsync(p, comando.Inicio, tct);
             foreach (var c in instancias)

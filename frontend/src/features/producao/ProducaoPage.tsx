@@ -16,7 +16,8 @@ import { Table } from "../../components/ui/Table";
 import { useToast } from "../../components/ui/Toast";
 import { mensagemErro } from "../../lib/api";
 import { cn } from "../../lib/cn";
-import { DIA, formatarInteiro, formatarPercentual, hojeCivil } from "../../lib/format";
+import { diaValido, formatarInteiro, formatarPercentual, hojeCivil } from "../../lib/format";
+import { comParametro } from "../../lib/queryKeys";
 import type { Producao } from "../../lib/types";
 import { useCursos, useProfissionais } from "../compartilhado/catalogos";
 import { AjustesTab } from "./components/AjustesTab";
@@ -45,8 +46,12 @@ function ComparacaoAnterior({ producao }: { producao: Producao }) {
     <Table caption="Variação sobre o período anterior">
       <thead>
         <tr className="border-b border-borda text-xs text-suave">
-          {["Categoria", "Ocorrências", "Variação", "Tempo", "Variação"].map((r, i) => (
-            <th key={i} scope="col" className={i === 0 ? "py-1 font-semibold" : "py-1 pl-3 text-right font-semibold"}>{r}</th>
+          {/* "Variação" aparece duas vezes: o complemento sr-only distingue os cabeçalhos para leitores de tela. */}
+          {[["Categoria"], ["Ocorrências anteriores"], ["Variação", " de ocorrências"], ["Tempo anterior"], ["Variação", " de tempo"]].map(([r, sr], i) => (
+            <th key={i} scope="col" className={i === 0 ? "py-1 font-semibold" : "py-1 pl-3 text-right font-semibold"}>
+              {r}
+              {sr && <span className="sr-only">{sr}</span>}
+            </th>
           ))}
         </tr>
       </thead>
@@ -82,9 +87,9 @@ export function ProducaoPage() {
   const cursos = useCursos(coordenacao);
 
   const tipoUrl = params.get("tipo");
-  const tipo: TipoPeriodo = tipoUrl && tipoUrl in ROTULO_PERIODO ? (tipoUrl as TipoPeriodo) : "Mes";
+  const tipo: TipoPeriodo = tipoUrl && Object.hasOwn(ROTULO_PERIODO, tipoUrl) ? (tipoUrl as TipoPeriodo) : "Mes";
   const refUrl = params.get("referencia") ?? "";
-  const referencia = DIA.test(refUrl) && !Number.isNaN(Date.parse(refUrl)) ? refUrl : hoje;
+  const referencia = diaValido(refUrl) ? refUrl : hoje;
   // Só coordenação e gestão escolhem profissional; só coordenação escolhe curso. Para os demais a API força o recorte.
   const profissionalId = coordenacao || gestao ? params.get("profissionalId") || undefined : undefined;
   const cursoId = coordenacao ? params.get("cursoId") || undefined : undefined;
@@ -109,17 +114,7 @@ export function ProducaoPage() {
   }
 
   function alterar(mudancas: Record<string, string>) {
-    setParams(
-      (p) => {
-        const proximo = new URLSearchParams(p);
-        for (const [k, v] of Object.entries(mudancas)) {
-          if (v) proximo.set(k, v);
-          else proximo.delete(k);
-        }
-        return proximo;
-      },
-      { replace: true },
-    );
+    setParams((p) => Object.entries(mudancas).reduce((proximo, [k, v]) => comParametro(proximo, k, v), p), { replace: true });
   }
 
   const p = consulta.data;
@@ -145,16 +140,17 @@ export function ProducaoPage() {
         </span>
       </>
     ));
-  const classeFiltro = "min-h-9 w-auto flex-auto rounded-full py-0 text-rotulo sm:flex-none";
+  // Mesma pílula dos filtros do painel; o min-w evita a barra pular quando o valor escolhido é curto.
+  const classeFiltro = "h-9 w-auto min-w-[9.5rem] flex-auto rounded-full py-0 text-rotulo sm:flex-none";
   // Ao trocar período ou filtro os números anteriores ficam na tela, esmaecidos, até a resposta chegar (como no painel).
   const ocupado = consulta.isPlaceholderData || undefined;
-  const classeOcupado = cn("transition-opacity", ocupado && "opacity-60");
+  const classeOcupado = cn("transition-opacity duration-150", ocupado && "opacity-60");
   return (
     <>
       <title>Produção · NAP</title>
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className={classeTituloPagina}>Produção</h1>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div role="search" aria-label="Filtrar produção" className="flex min-w-0 flex-wrap items-center gap-2">
           {(coordenacao || gestao) && (
             <>
               <label htmlFor={`${idFiltro}-prof`} className="sr-only">

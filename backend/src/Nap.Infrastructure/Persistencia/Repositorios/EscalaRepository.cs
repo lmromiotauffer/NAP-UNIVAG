@@ -10,7 +10,7 @@ public sealed class EscalaRepository(NapDbContext db) : IEscalaRepository
     public Task<EscalaProfissional?> ObterAsync(Guid id, CancellationToken ct) =>
         db.EscalasProfissional.SingleOrDefaultAsync(e => e.Id == id, ct);
 
-    // Vigências não se sobrepõem; o First só evita derrubar a agenda se um dia houver duas.
+    // Mesma escolha de EscalaProfissional.VigenteEm, feita no banco.
     public Task<EscalaProfissional?> ObterVigenteAsync(Guid profissionalId, DateOnly data, CancellationToken ct) =>
         db.EscalasProfissional.AsNoTracking()
             .Where(e => e.ProfissionalId == profissionalId && e.VigenciaInicio <= data && (e.VigenciaFim == null || e.VigenciaFim >= data))
@@ -44,6 +44,9 @@ public sealed class EscalaRepository(NapDbContext db) : IEscalaRepository
 
     public Task<AutorizacaoForaEscala?> ObterAutorizacaoAsync(Guid id, CancellationToken ct) =>
         db.AutorizacoesForaEscala.SingleOrDefaultAsync(a => a.Id == id, ct);
+
+    public Task<Guid?> ProfissionalDaAutorizacaoAsync(Guid id, CancellationToken ct) =>
+        db.AutorizacoesForaEscala.AsNoTracking().Where(a => a.Id == id).Select(a => (Guid?)a.ProfissionalId).SingleOrDefaultAsync(ct);
 
     public Task<bool> ExisteAutorizacaoAtivaAsync(Guid profissionalId, DateTimeOffset inicio, CancellationToken ct) =>
         db.AutorizacoesForaEscala.AsNoTracking().AnyAsync(a => a.ProfissionalId == profissionalId && a.RevogadaEm == null

@@ -41,6 +41,71 @@ public class IdempotenciaTests(ApiFactory fabrica)
         Assert.Equal(1, busca.GetProperty("total").GetInt32());
     }
 
+    private static async Task<object> CorpoAlunoAsync(HttpClient cliente, Guid profissionalId, int semestre = 2)
+    {
+        var cursos = await cliente.GetFromJsonAsync<JsonElement>("/api/cursos");
+        return new
+        {
+            nomeCompleto = "Aluno Idempotente", matricula = "I" + Guid.NewGuid().ToString("N")[..10],
+            cursoId = cursos.EnumerateArray().First().GetProperty("id").GetGuid(), semestre, inicioAcompanhamento = "2026-02-01",
+            profissionalResponsavelId = profissionalId,
+        };
+    }
+
+    private static Task<HttpResponseMessage> PostarAsync(HttpClient cliente, string url, object corpo, string chave)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = JsonContent.Create(corpo) };
+        req.Headers.Add("Idempotency-Key", chave);
+        return cliente.SendAsync(req);
+    }
+
+    [Fact]
+    public async Task Falha_da_acao_libera_a_chave_para_nova_tentativa()
+    {
+        var cliente = await fabrica.ClienteComo("coordenacao@nap.demo");
+        var profissionalId = await ApiFactory.IdDoUsuarioAsync(await fabrica.ClienteComo("ana.beatriz@nap.demo"));
+        var chave = Guid.NewGuid().ToString();
+
+        var invalido = await PostarAsync(cliente, "/api/alunos", await CorpoAlunoAsync(cliente, profissionalId, semestre: 0), chave);
+        var corrigido = await PostarAsync(cliente, "/api/alunos", await CorpoAlunoAsync(cliente, profissionalId), chave);
+
+        Assert.Equal(HttpStatusCode.BadRequest, invalido.StatusCode);
+        // Sem a liberação, a chave ficaria "em andamento" e a repetição corrigida receberia 409 por 5 minutos.
+        Assert.Equal(HttpStatusCode.Created, corrigido.StatusCode);
+    }
+
+    [Fact]
+    public async Task Chave_em_andamento_retorna_409_e_nao_cria()
+    {
+        var cliente = await fabrica.ClienteComo("coordenacao@nap.demo");
+        var usuarioId = await ApiFactory.IdDoUsuarioAsync(cliente);
+        var profissionalId = await ApiFactory.IdDoUsuarioAsync(await fabrica.ClienteComo("ana.beatriz@nap.demo"));
+        var chave = Guid.NewGuid().ToString();
+        await using (var escopo = fabrica.Services.CreateAsyncScope())
+            await escopo.ServiceProvider.GetRequiredService<IChavesIdempotencia>()
+                .ReservarAsync(usuarioId, chave, "POST /api/alunos", TestContext.Current.CancellationToken);
+
+        var resposta = await PostarAsync(cliente, "/api/alunos", await CorpoAlunoAsync(cliente, profissionalId), chave);
+
+        Assert.Equal(HttpStatusCode.Conflict, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Mesma_chave_em_outra_rota_retorna_409()
+    {
+        var cliente = await fabrica.ClienteComo("coordenacao@nap.demo");
+        var profissionalId = await ApiFactory.IdDoUsuarioAsync(await fabrica.ClienteComo("ana.beatriz@nap.demo"));
+        var chave = Guid.NewGuid().ToString();
+        Assert.Equal(HttpStatusCode.Created,
+            (await PostarAsync(cliente, "/api/alunos", await CorpoAlunoAsync(cliente, profissionalId), chave)).StatusCode);
+
+        var inicio = new DateTimeOffset(2031, 3, 5, 14, 0, 0, TimeSpan.Zero);
+        var outra = await PostarAsync(cliente, "/api/agenda",
+            new { tipo = "Lembrete", titulo = "Lembrete", inicio, fim = inicio.AddHours(1) }, chave);
+
+        Assert.Equal(HttpStatusCode.Conflict, outra.StatusCode);
+    }
+
     [Fact]
     public async Task Falha_ao_concluir_a_chave_tenta_de_novo_loga_critical_e_mantem_o_201()
     {

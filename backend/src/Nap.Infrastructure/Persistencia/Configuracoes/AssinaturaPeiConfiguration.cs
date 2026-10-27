@@ -20,6 +20,8 @@ public class AssinaturaPeiConfiguration : IEntityTypeConfiguration<AssinaturaPei
 
         builder.HasOne<UsuarioIdentidade>().WithMany().HasForeignKey(a => a.SignatarioId).OnDelete(DeleteBehavior.Restrict);
         builder.Property<Guid>("VersaoId");
-        builder.HasIndex("VersaoId", nameof(AssinaturaPei.Papel)).IsUnique();
+        builder.Ignore(a => a.Valida);
+        // Uma assinatura valendo por papel; as invalidadas por devolução ficam como histórico.
+        builder.HasIndex("VersaoId", nameof(AssinaturaPei.Papel)).IsUnique().HasFilter("[InvalidadaEm] IS NULL");
     }
 }

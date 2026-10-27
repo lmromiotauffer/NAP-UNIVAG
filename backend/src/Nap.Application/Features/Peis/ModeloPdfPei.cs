@@ -13,6 +13,9 @@ public record ModeloPdfPei(VariantePdf Variante, string Aluno, string Matricula,
 
     public string AvisoAssinatura => AcessoAluno.AvisoAssinatura;
 
+    /// <summary>Método gravado pela assinatura demonstrativa; só ele leva o aviso de "não certificada".</summary>
+    public const string MetodoDemonstrativo = "Demonstrativa";
+
     public static ModeloPdfPei Montar(VersaoPeiDetalheDto d, VariantePdf v)
     {
         var c = d.Conteudo;

@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { iniciais } from "../../../components/layout/AppShell";
 import { cn } from "../../../lib/cn";
-import { diaCivil, diaDaSemana, formatarDataCivil, formatarDiaSemana, formatarHora, hojeCivil, horaCivil } from "../../../lib/format";
+import { diaCivil, diaDaSemana, formatarDataCivil, formatarDiaSemana, formatarIntervalo, hojeCivil, horaCivil, minutosDoDia } from "../../../lib/format";
 import type { AtendimentoAvulsoAgenda, AtividadeAvulsaAgenda, Compromisso, DiaEscala, EscalaSemana } from "../../../lib/types";
 import { ROTULO_TIPO_ATIVIDADE } from "../../atividades/rotulos";
 import { BlocoCompromisso } from "./BlocoCompromisso";
@@ -19,12 +19,6 @@ export const diasVisiveis = (escala: EscalaSemana, datasComItem: ReadonlySet<str
 
 /** Dias civis em que começa algum item da semana. */
 export const datasDosItens = (itens: { inicio: string }[]): Set<string> => new Set(itens.map((i) => diaCivil(i.inicio)));
-
-/** "07:00" ou "07:00:00" → minutos desde a meia-noite. */
-function minutos(hora: string): number {
-  const [h = 0, m = 0] = hora.split(":").map(Number);
-  return h * 60 + m;
-}
 
 type Pessoa = { id: string; nome: string };
 
@@ -58,20 +52,21 @@ export function GradeSemanal({
   const dias = diasVisiveis(escala, datasDosItens([...compromissos, ...avulsos, ...atividades]));
   // Sem nenhuma faixa na semana, a grade mantém o expediente padrão.
   const comFaixa = dias.filter((d) => d.inicio != null && d.fim != null);
-  const abertura = comFaixa.length ? Math.min(...comFaixa.map((d) => minutos(d.inicio!))) : 7 * 60;
+  const abertura = comFaixa.length ? Math.min(...comFaixa.map((d) => minutosDoDia(d.inicio!))) : 7 * 60;
   // Um item que termina depois do fechamento (tempo extra) alarga a grade em vez de ser cortado.
   const fimDosItens = [...compromissos, ...avulsos, ...atividades]
     .filter((it) => dias.some((d) => d.data === diaCivil(it.inicio)))
-    .map((it) => (diaCivil(it.fim) === diaCivil(it.inicio) ? minutos(horaCivil(it.fim)) : 24 * 60));
-  const fechamento = Math.max(comFaixa.length ? Math.max(...comFaixa.map((d) => minutos(d.fim!))) : 17 * 60, ...fimDosItens);
+    .map((it) => (diaCivil(it.fim) === diaCivil(it.inicio) ? minutosDoDia(horaCivil(it.fim)) : 24 * 60));
+  const fechamento = Math.max(comFaixa.length ? Math.max(...comFaixa.map((d) => minutosDoDia(d.fim!))) : 17 * 60, ...fimDosItens);
   const horas: number[] = [];
-  for (let m = abertura; m < fechamento; m += 60) horas.push(m);
+  // Rótulos e linhas só em horas cheias: uma escala que abre às 07:30 não pode gerar "7.5h".
+  for (let m = Math.ceil(abertura / 60) * 60; m < fechamento; m += 60) horas.push(m);
   const total = fechamento - abertura;
   const altura = total * PX_POR_MINUTO;
   /** Posição vertical em % da grade: acompanha a altura real das colunas. */
   const pct = (min: number): string => `${((min - abertura) / total) * 100}%`;
   const hoje = hojeCivil(agora);
-  const agoraMin = minutos(horaCivil(agora.toISOString()));
+  const agoraMin = minutosDoDia(horaCivil(agora.toISOString()));
 
   // Profissionais fora da lista (ex.: inativos) ganham sub-coluna no fim, para nenhum bloco sumir.
   const pistas = equipe ? [...equipe] : [];
@@ -90,7 +85,7 @@ export function GradeSemanal({
       // O nome acessível começa pelo texto visível do bloco (WCAG 2.5.3); na equipe o nome completo vem depois das iniciais.
       const rotulo = [
         texto,
-        `${formatarHora(c.inicio)}–${formatarHora(c.fim)}`,
+        `${formatarIntervalo(c.inicio, c.fim)}`,
         ROTULO_TIPO[c.tipo],
         ...(equipe ? [quem] : []),
         estilo.rotuloEstado.toLowerCase(),
@@ -122,7 +117,7 @@ export function GradeSemanal({
       const texto = equipe ? iniciais(a.aluno) : a.aluno;
       const rotulo = [
         texto,
-        `${formatarHora(a.inicio)}–${formatarHora(a.fim)}`,
+        `${formatarIntervalo(a.inicio, a.fim)}`,
         ROTULO_TIPO_ATENDIMENTO[a.tipo],
         ...(equipe ? [a.aluno] : []),
         estilo.rotuloEstado.toLowerCase(),
@@ -150,7 +145,7 @@ export function GradeSemanal({
       const tipo = ROTULO_TIPO_ATIVIDADE[a.tipo];
       const rotulo = [
         tipo,
-        `${formatarHora(a.inicio)}–${formatarHora(a.fim)}`,
+        `${formatarIntervalo(a.inicio, a.fim)}`,
         "Atividade no curso",
         "atividade avulsa",
         ...(equipe ? [`com ${a.profissional}`] : []),
@@ -177,9 +172,9 @@ export function GradeSemanal({
   function posicao(it: Item, dia: string): CSSProperties {
     const { lembrete } = it;
     // Fora do expediente (dado antigo ou corrigido): preso à borda da grade com altura mínima, nunca um botão de altura zero.
-    const fimMin = diaCivil(it.fim) === dia ? minutos(horaCivil(it.fim)) : 24 * 60;
+    const fimMin = diaCivil(it.fim) === dia ? minutosDoDia(horaCivil(it.fim)) : 24 * 60;
     const fim = Math.min(total, Math.max(fimMin - abertura, 0));
-    const inicio = Math.min(Math.max(0, minutos(horaCivil(it.inicio)) - abertura), fim, total - ALTURA_MINIMA);
+    const inicio = Math.min(Math.max(0, minutosDoDia(horaCivil(it.inicio)) - abertura), fim, total - ALTURA_MINIMA);
     const n = equipe ? pistas.length : 1;
     const pista = equipe ? pistas.findIndex((p) => p.id === it.profissionalId) : 0;
     const largura = 100 / n;
@@ -206,7 +201,7 @@ export function GradeSemanal({
           <div
             key={d.data}
             className={cn(
-              "border-b border-l border-borda px-2.5 py-2.5 text-xs font-medium",
+              "border-b border-l border-borda px-2.5 py-2.5 text-xs font-medium max-xl:animate-surgir [--entrada-y:0]",
               i !== diaMovel && "max-xl:hidden",
               ehHoje ? "bg-realce font-bold text-primaria" : desabilitado || d.semAtendimento ? "text-suave" : "text-texto",
             )}
@@ -248,7 +243,8 @@ export function GradeSemanal({
             aria-label={`${nomeDia(dia)}, ${formatarDataCivil(dia)}${aviso ? `, ${aviso.toLowerCase()}` : ""}`}
             style={{ minHeight: altura }}
             className={cn(
-              "relative border-l border-borda",
+              // No celular o dia trocado chega com surgir (de display:none a visível a animação reinicia); sem subida, pois a grade já desliza na troca de semana.
+              "relative border-l border-borda max-xl:animate-surgir [--entrada-y:0]",
               i !== diaMovel && "max-xl:hidden",
               ehHoje && "bg-linha",
               (aviso || d.semAtendimento) &&

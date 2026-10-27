@@ -34,10 +34,13 @@ public sealed class UnidadeDeTrabalho(NapDbContext db) : IUnidadeDeTrabalho
         // A versão original é a lida ao carregar a entidade; o SaveChanges também a usa no WHERE, então isto só antecipa o conflito.
         var atual = (byte[]?)db.Entry(entidade).Property("Versao").OriginalValue;
         Span<byte> esperada = stackalloc byte[8];
-        if (!Convert.TryFromBase64String(versaoEsperada.Trim('"'), esperada, out var n)
-            || atual is null || !esperada[..n].SequenceEqual(atual))
+        if (!Convert.TryFromBase64String(versaoEsperada.Trim('"'), esperada, out var n) || n != 8)
+            throw Validacao.ErroDeCampo("ifMatch", "Cabeçalho If-Match inválido.");
+        if (atual is null || !esperada.SequenceEqual(atual))
             throw new ConflictException(MensagemRegistroAlterado);
     }
+
+    public string Versao(object entidade) => Convert.ToBase64String((byte[])db.Entry(entidade).Property("Versao").CurrentValue!);
 
     public async Task<T> EmTransacaoAsync<T>(Func<CancellationToken, Task<T>> operacao, CancellationToken ct)
     {
@@ -74,6 +77,7 @@ public sealed class UnidadeDeTrabalho(NapDbContext db) : IUnidadeDeTrabalho
         // Duas criações simultâneas de versão esbarram em um dos dois índices.
         : mensagemSql.Contains("IX_VersoesPei_PeiId_Aberta") || mensagemSql.Contains("IX_VersoesPei_PeiId_Numero")
             ? "Já existe uma versão em elaboração."
+        : mensagemSql.Contains("IX_Peis_AlunoId") ? "O aluno já possui PEI; crie uma nova versão."
         : mensagemSql.Contains("IX_AssinaturasPei_VersaoId_Papel") ? "Esta versão já foi assinada neste papel."
         : mensagemSql.Contains("IX_CienciasPei_VersaoId_CoordenadorId") ? Application.Features.Peis.Commands.RegistrarCienciaPeiHandler.MensagemCienciaDuplicada
         : mensagemSql.Contains("IX_AcessosAssinaturaPei_VersaoId_Aberto")

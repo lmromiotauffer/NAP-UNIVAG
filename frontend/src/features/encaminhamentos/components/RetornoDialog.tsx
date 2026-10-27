@@ -96,7 +96,7 @@ export function RetornoDialog({
   return (
     <Modal aberto aoFechar={aoFechar} titulo={BOTAO_ACAO[acao]}>
       <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-        {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+        {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
         <p className="text-sm text-suave">
           {encaminhamento.aluno} · {encaminhamento.curso}
         </p>

@@ -1,4 +1,4 @@
-import { ChevronLeft, Mail } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { pode } from "../../auth/capacidades";
@@ -8,10 +8,10 @@ import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { classeSecao, classeTituloPagina } from "../../components/ui/Card";
 import { Carregando } from "../../components/ui/Carregando";
+import { Dado } from "../../components/ui/Dado";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { ListaAbas } from "../../components/ui/ListaAbas";
 import { Modal } from "../../components/ui/Modal";
-import { Select } from "../../components/ui/Select";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { classeMolduraRolavel } from "../../components/ui/Table";
 import { useToast } from "../../components/ui/Toast";
@@ -22,9 +22,8 @@ import { DetalheAtendimento } from "../atendimentos/components/DetalheAtendiment
 import { ListaAtendimentos } from "../atendimentos/components/ListaAtendimentos";
 import { DocumentosDoAluno } from "../documentos/components/DocumentosDoAluno";
 import { PeisDoAluno } from "../peis/components/PeisDoAluno";
-import { CaixaMensagens } from "../comunicacoes/components/CaixaMensagens";
+import { ComunicacoesVinculadas } from "../comunicacoes/components/ComunicacoesVinculadas";
 import { EscreverMensagem } from "../comunicacoes/components/EscreverMensagem";
-import { CAIXAS, ROTULO_CAIXA, type Caixa } from "../comunicacoes/rotulos";
 import { EncaminhamentoForm } from "../encaminhamentos/components/EncaminhamentoForm";
 import { ListaEncaminhamentos } from "../encaminhamentos/components/ListaEncaminhamentos";
 import { AlterarSituacaoDialog } from "./components/AlterarSituacaoDialog";
@@ -47,16 +46,14 @@ function ResumoPedagogico({ aluno }: { aluno: AlunoFicha }) {
         Resumo do acompanhamento
       </h2>
       {/* Os dois textos lado a lado no desktop: a seção ocupa a largura do painel em vez de deixar metade vazia. */}
-      <div className="grid gap-3.5 md:grid-cols-2 md:gap-6">
-        <div>
-          <div className="mb-0.5 text-xs text-suave">Necessidades educacionais</div>
-          <div className="text-corpo whitespace-pre-line">{aluno.necessidadesEducacionais || "—"}</div>
-        </div>
-        <div>
-          <div className="mb-0.5 text-xs text-suave">Observações acadêmicas</div>
-          <div className="text-corpo whitespace-pre-line">{aluno.observacoesAcademicas || "—"}</div>
-        </div>
-      </div>
+      <dl className="grid gap-3.5 md:grid-cols-2 md:gap-6">
+        <Dado rotulo="Necessidades educacionais" classeValor="text-corpo whitespace-pre-line">
+          {aluno.necessidadesEducacionais || "—"}
+        </Dado>
+        <Dado rotulo="Observações acadêmicas" classeValor="text-corpo whitespace-pre-line">
+          {aluno.observacoesAcademicas || "—"}
+        </Dado>
+      </dl>
       <p className="m-0 rounded-xl bg-realce px-3.5 py-3 text-rotulo text-suave">
         Queixas clínicas, diagnósticos e notas privadas ficam nos atendimentos e são visíveis apenas ao NAP.
       </p>
@@ -119,50 +116,6 @@ function EncaminhamentosDoAluno({ aluno, aoEncaminhar }: { aluno: AlunoFicha; ao
   );
 }
 
-/** Mensagens deste aluno nas caixas do próprio usuário (a API só devolve as de que ele participa). */
-function ComunicacoesDoAluno({ aluno, aoEscrever }: { aluno: AlunoFicha; aoEscrever: () => void }) {
-  const [caixa, setCaixa] = useState<Caixa>("Entrada");
-  const [pagina, setPagina] = useState(1);
-  return (
-    <section aria-labelledby="titulo-comunicacoes" className={classeMolduraRolavel}>
-      <div className="flex flex-wrap items-center justify-between gap-2 px-[22px] pt-4 pb-2">
-        <h2 id="titulo-comunicacoes" className="m-0 font-titulo text-base font-bold">
-          Comunicações
-        </h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="caixa-aluno" className="sr-only">
-            Caixa
-          </label>
-          <Select
-            id="caixa-aluno"
-            value={caixa}
-            onChange={(e) => {
-              setCaixa(e.target.value as Caixa);
-              setPagina(1);
-            }}
-            className="h-8 w-auto py-0 text-xs"
-          >
-            {CAIXAS.map((c) => (
-              <option key={c} value={c}>
-                {ROTULO_CAIXA[c]}
-              </option>
-            ))}
-          </Select>
-          <Button tamanho="sm" onClick={aoEscrever}>
-            Nova mensagem
-          </Button>
-        </div>
-      </div>
-      <CaixaMensagens
-        filtro={{ caixa, alunoId: aluno.id, pagina, tamanho: TAMANHO_LISTA }}
-        comBusca={false}
-        aoMudarPagina={setPagina}
-        vazio={{ icone: <Mail />, titulo: "Nenhuma mensagem", descricao: "As mensagens sobre este aluno de que você participa aparecem aqui." }}
-      />
-    </section>
-  );
-}
-
 function FichaCarregando() {
   return (
     <Carregando rotulo="Carregando ficha" className="flex flex-col gap-[18px]">
@@ -175,7 +128,7 @@ function FichaCarregando() {
       </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
         {Array.from({ length: 4 }, (_, i) => (
-          <Skeleton key={i} className="h-[104px] rounded-2xl" />
+          <Skeleton key={i} className="h-[104px] rounded-cartao" />
         ))}
       </div>
       <Skeleton className="h-10 w-72" />
@@ -255,9 +208,11 @@ export function FichaAlunoPage() {
             <h1 className={classeTituloPagina}>{aluno.nome}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-denso text-suave">
               <span className="min-w-0 break-words">
-                Matrícula {aluno.matricula} · {aluno.curso || "—"} · {aluno.semestre}º semestre
+                Matrícula {aluno.matricula}
+                {aluno.matriculaAtiva != null && ` (${aluno.matriculaAtiva ? "ativa" : "inativa"})`} · {aluno.curso || "—"}
+                {aluno.semestre != null && ` · ${aluno.semestre}º semestre`}
               </span>
-              <Badge variante={VARIANTE_SITUACAO[aluno.situacao]}>{ROTULO_SITUACAO[aluno.situacao]}</Badge>
+              {aluno.situacao && <Badge variante={VARIANTE_SITUACAO[aluno.situacao]}>{ROTULO_SITUACAO[aluno.situacao]}</Badge>}
             </div>
           </div>
         </div>
@@ -292,7 +247,13 @@ export function FichaAlunoPage() {
           {aba === "resumo" && <ResumoPedagogico aluno={aluno} />}
           {aba === "atendimentos" && podeRegistrar && <AtendimentosDoAluno aluno={aluno} aoRegistrar={() => setDialogo("registrar")} />}
           {aba === "encaminhamentos" && <EncaminhamentosDoAluno aluno={aluno} aoEncaminhar={podeEncaminhar ? () => setDialogo("encaminhar") : undefined} />}
-          {aba === "comunicacoes" && podeComunicar && <ComunicacoesDoAluno aluno={aluno} aoEscrever={() => setDialogo("mensagem")} />}
+          {aba === "comunicacoes" && podeComunicar && (
+            <ComunicacoesVinculadas
+              vinculo={{ alunoId: aluno.id }}
+              descricaoVazia="As mensagens sobre este aluno de que você participa aparecem aqui."
+              aoEscrever={() => setDialogo("mensagem")}
+            />
+          )}
           {aba === "documentos" && pode(usuario, "alunos.consultar") && <DocumentosDoAluno alunoId={aluno.id} />}
           {aba === "pei" && pode(usuario, "peis") && <PeisDoAluno alunoId={aluno.id} />}
           {aba === "linha" && <LinhaDoTempo alunoId={aluno.id} />}

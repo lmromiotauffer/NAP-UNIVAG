@@ -3,7 +3,7 @@ using Nap.Application.Comum;
 
 namespace Nap.Application.Features.Producao.Commands;
 
-public record ReabrirSemanaCommand(Guid ProfissionalId, DateOnly Semana, string Justificativa, string? Versao);
+public record ReabrirSemanaCommand(Guid ProfissionalId, DateOnly Semana, string Justificativa, string Versao);
 
 public class ReabrirSemanaValidator : AbstractValidator<ReabrirSemanaCommand>
 {
@@ -29,7 +29,7 @@ public sealed class ReabrirSemanaHandler(IValidator<ReabrirSemanaCommand> valida
             await fechamentos.BloquearAsync(comando.ProfissionalId, true, tct);
             var fechamento = await fechamentos.ObterAsync(comando.ProfissionalId, comando.Semana, tct)
                 ?? throw new NotFoundException("Fechamento da semana");
-            uow.ExigirVersao(fechamento, comando.Versao ?? string.Empty);
+            uow.ExigirVersao(fechamento, comando.Versao);
 
             fechamento.Reabrir(comando.Justificativa, usuario.Id, relogio.Agora);
             auditoria.Registrar("producao.semana.reabrir", "FechamentoSemanal", fechamento.Id);

@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { useState, type ComponentProps } from "react";
 import { useForm } from "react-hook-form";
 import { Navigate, useSearchParams } from "react-router";
 import { z } from "zod";
@@ -9,6 +10,7 @@ import { Field } from "../components/ui/Field";
 import { Input } from "../components/ui/Input";
 import { LogoUnivag } from "../components/ui/LogoUnivag";
 import { mensagemErro, normalizarErro } from "../lib/api";
+import { destinoSeguro } from "../lib/navegacao";
 import { useSessao } from "./useSessao";
 
 const esquema = z.object({
@@ -17,10 +19,25 @@ const esquema = z.object({
 });
 type Credenciais = z.infer<typeof esquema>;
 
-/** Só caminhos relativos da própria origem: bloqueia "//host", "/\host" e caracteres de controle (open redirect). */
-export function destinoSeguro(voltar: string | null): string {
-  if (!voltar || !/^\/(?![/\\])/.test(voltar) || /[\u0000-\u001f\\]/.test(voltar) || voltar.startsWith("/entrar")) return "/";
-  return voltar;
+/** Recebe do Field id, aria-describedby e invalid e os repassa ao Input; o botão fica sobreposto à direita. */
+function CampoSenha(props: ComponentProps<typeof Input>) {
+  const [mostrar, setMostrar] = useState(false);
+  const Icone = mostrar ? EyeOff : Eye;
+  return (
+    <div className="relative">
+      <Input {...props} type={mostrar ? "text" : "password"} className="pr-11" />
+      <button
+        type="button"
+        onClick={() => setMostrar(!mostrar)}
+        // Rótulo fixo: o estado já vai em aria-pressed. Com rótulo trocando, o leitor de tela anunciava "Ocultar senha, pressionado".
+        aria-label="Mostrar senha"
+        aria-pressed={mostrar}
+        className="absolute inset-y-0 right-0 flex w-11 cursor-pointer items-center justify-center rounded-md text-suave transition-colors duration-150 hover:text-texto focus-visible:outline-2 focus-visible:outline-primaria"
+      >
+        <Icone aria-hidden="true" className="size-[18px]" />
+      </button>
+    </div>
+  );
 }
 
 export function LoginPage() {
@@ -88,7 +105,7 @@ export function LoginPage() {
               <Input type="email" autoComplete="username" inputMode="email" autoFocus {...register("email")} />
             </Field>
             <Field rotulo="Senha" erro={errors.senha?.message}>
-              <Input type="password" autoComplete="current-password" {...register("senha")} />
+              <CampoSenha autoComplete="current-password" {...register("senha")} />
             </Field>
             <Button type="submit" carregando={isSubmitting} disabled={estado === "carregando"} className="mt-1 w-full">
               {isSubmitting ? "Entrando…" : "Entrar"}

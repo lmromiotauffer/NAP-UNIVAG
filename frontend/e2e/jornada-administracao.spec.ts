@@ -1,11 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { entrar, tokenDe } from "./apoio";
-
-const diaCuiaba = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Cuiaba" }).format(d);
+import { hojeCivil, entrar, tokenDe } from "./apoio";
 
 /** Próxima data (estritamente depois de hoje, no fuso do NAP) que cai no dia da semana pedido (0 = domingo). */
 function proximoDia(diaSemana: number): string {
-  const hoje = new Date(`${diaCuiaba(new Date())}T12:00:00Z`);
+  const hoje = new Date(`${hojeCivil(new Date())}T12:00:00Z`);
   const falta = ((diaSemana - hoje.getUTCDay() + 7) % 7) || 7;
   hoje.setUTCDate(hoje.getUTCDate() + falta);
   return hoje.toISOString().slice(0, 10);
@@ -55,7 +53,7 @@ test("coordenação cria profissional, escala e feriado; a agenda recusa; inativ
     await page.getByRole("button", { name: "Nova escala" }).click();
     const escala = page.getByRole("dialog", { name: "Nova escala" });
     await escala.getByLabel("Profissional").selectOption({ label: nome });
-    await escala.getByLabel("Início da vigência").fill(diaCuiaba(new Date()));
+    await escala.getByLabel("Início da vigência").fill(hojeCivil(new Date()));
     await escala.getByLabel("Quarta-feira", { exact: true }).uncheck();
     await escala.getByRole("button", { name: "Salvar" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Escala cadastrada." })).toBeVisible();

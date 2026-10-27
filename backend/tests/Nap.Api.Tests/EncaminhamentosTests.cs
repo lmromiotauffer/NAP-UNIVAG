@@ -80,7 +80,8 @@ public class EncaminhamentosTests(ApiFactory fabrica)
         var detalhe = await coord.GetFromJsonAsync<JsonElement>($"/api/encaminhamentos/{id}");
         Assert.Equal(JsonValueKind.Null, detalhe.GetProperty("motivoRestrito").ValueKind);
         Assert.Equal(JsonValueKind.Null, detalhe.GetProperty("observacoes").ValueKind);
-        Assert.Equal("Resumo pedagógico", detalhe.GetProperty("resumoCompartilhavel").GetString());
+        // Destino Clínica Escola: o resumo também fica de fora (só aparece quando o destino é a coordenação).
+        Assert.Equal(JsonValueKind.Null, detalhe.GetProperty("resumoCompartilhavel").ValueKind);
     }
 
     [Fact]

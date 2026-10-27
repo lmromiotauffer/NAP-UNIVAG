@@ -12,6 +12,10 @@ public sealed class FechamentoRepositoryEmMemoria : IFechamentoRepository
 
     public void Adicionar(FechamentoSemanal f) => Fechamentos.Add(f);
 
+    public Task<bool> ExisteFechadaAsync(Guid? profissionalId, DateOnly primeiraSemana, DateOnly? ate, CancellationToken ct) =>
+        Task.FromResult(Fechamentos.Any(f => f.Fechada && (profissionalId is null || f.ProfissionalId == profissionalId)
+            && f.Semana >= primeiraSemana && (ate is null || f.Semana <= ate)));
+
     public List<(Guid ProfissionalId, bool Exclusivo)> Bloqueios { get; } = [];
 
     /// <summary>Log compartilhado com o fake de agenda (ver <see cref="AgendaRepositoryEmMemoria.Travas"/>).</summary>

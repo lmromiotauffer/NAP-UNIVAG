@@ -30,6 +30,14 @@ describe("queryKeys", () => {
     expect(INVALIDAR_APOS_ATENDIMENTO.map((p) => p[0])).toContain(queryKeys.alunos.ficha("1")[0]);
   });
   it("aluno_alterado_invalida_onde_o_nome_aparece", () => {
-    expect(INVALIDAR_APOS_ALUNO.map((p) => p[0])).toEqual(expect.arrayContaining([queryKeys.agenda.escalaSemana("2026-09-28")[0], queryKeys.atendimentos.detalhe("1")[0]]));
+    expect(INVALIDAR_APOS_ALUNO.map((p) => p[0])).toEqual(
+      expect.arrayContaining([
+        queryKeys.agenda.escalaSemana("2026-09-28")[0],
+        queryKeys.atendimentos.detalhe("1")[0],
+        queryKeys.encaminhamentos.lista()[0],
+        queryKeys.comunicacoes.caixa()[0],
+        queryKeys.peis.versao("1")[0],
+      ]),
+    );
   });
 });

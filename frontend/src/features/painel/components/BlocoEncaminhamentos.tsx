@@ -35,7 +35,7 @@ export function BlocoEncaminhamentos({ dados, ehSip, podeAbrir }: { dados: NonNu
           Encaminhamentos
         </h2>
         {podeAbrir && (
-          <Link to="/encaminhamentos" className="inline-flex items-center text-rotulo font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
+          <Link to="/encaminhamentos" className="inline-flex items-center rounded-sm text-xs font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
             Ver encaminhamentos
           </Link>
         )}

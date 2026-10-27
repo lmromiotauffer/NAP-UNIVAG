@@ -7,13 +7,14 @@ import { useSessao } from "../../auth/useSessao";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
 import { classeIconeTitulo, classeTituloPagina } from "../../components/ui/Card";
+import { Carregando } from "../../components/ui/Carregando";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { Modal } from "../../components/ui/Modal";
 import { Select } from "../../components/ui/Select";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/Toast";
 import { cn } from "../../lib/cn";
-import { DIA, diaCivil, formatarDiaSemana, formatarSemana, hojeCivil, segundaDoDia, somarDias } from "../../lib/format";
+import { diaCivil, diasEntre, diaValido, formatarDiaSemana, formatarSemana, hojeCivil, segundaDoDia, somarDias } from "../../lib/format";
 import { queryKeys } from "../../lib/queryKeys";
 import type { AtendimentoAvulsoAgenda, AtividadeAvulsaAgenda, Compromisso } from "../../lib/types";
 import { alunoService } from "../alunos/services/alunoService";
@@ -40,22 +41,24 @@ function useAgora(): Date {
 
 function GradeCarregando() {
   return (
-    <div aria-hidden="true" className="grid flex-1 grid-cols-[48px_minmax(0,1fr)] grid-rows-[auto_1fr] xl:grid-cols-[48px_repeat(5,minmax(0,1fr))]">
-      <div className="border-b border-borda" />
-      {Array.from({ length: 5 }, (_, i) => (
-        <div key={i} className={cn("border-b border-l border-borda px-2.5 py-2.5", i > 0 && "max-xl:hidden")}>
-          <Skeleton className="h-4 w-14" />
-        </div>
-      ))}
-      <div className="min-h-[600px]" />
-      {Array.from({ length: 5 }, (_, i) => (
-        <div key={i} className={cn("relative min-h-[600px] border-l border-borda", i > 0 && "max-xl:hidden")}>
-          <Skeleton className="absolute inset-x-1 top-[60px] h-[58px]" />
-          <Skeleton className="absolute inset-x-1 top-[180px] h-[88px]" />
-          {i % 2 === 0 && <Skeleton className="absolute inset-x-1 top-[420px] h-[58px]" />}
-        </div>
-      ))}
-    </div>
+    <Carregando rotulo="Carregando agenda" className="flex min-h-0 flex-1 flex-col">
+      <div aria-hidden="true" className="grid flex-1 grid-cols-[48px_minmax(0,1fr)] grid-rows-[auto_1fr] xl:grid-cols-[48px_repeat(5,minmax(0,1fr))]">
+        <div className="border-b border-borda" />
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className={cn("border-b border-l border-borda px-2.5 py-2.5", i > 0 && "max-xl:hidden")}>
+            <Skeleton className="h-4 w-14" />
+          </div>
+        ))}
+        <div className="min-h-[600px]" />
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className={cn("relative min-h-[600px] border-l border-borda", i > 0 && "max-xl:hidden")}>
+            <Skeleton className="absolute inset-x-1 top-[60px] h-[58px]" />
+            <Skeleton className="absolute inset-x-1 top-[180px] h-[88px]" />
+            {i % 2 === 0 && <Skeleton className="absolute inset-x-1 top-[420px] h-[58px]" />}
+          </div>
+        ))}
+      </div>
+    </Carregando>
   );
 }
 
@@ -69,7 +72,7 @@ export function AgendaPage() {
 
   const semanaUrl = params.get("semana") ?? "";
   // Sempre a segunda-feira no calendário de Cuiabá: a API recusa outro dia.
-  const segunda = segundaDoDia(DIA.test(semanaUrl) && !Number.isNaN(Date.parse(semanaUrl)) ? semanaUrl : hoje);
+  const segunda = segundaDoDia(diaValido(semanaUrl) ? semanaUrl : hoje);
   // Todos abrem na própria agenda: com a equipe inteira (uma pista por profissional em cada dia) a grade só é legível em tela larga, e por escolha.
   const visao = params.get("profissional") ?? usuario?.id ?? EQUIPE;
   const daEquipe = visao === EQUIPE;
@@ -91,7 +94,8 @@ export function AgendaPage() {
   const [atividadeAberta, setAtividadeAberta] = useState<AtividadeAvulsaAgenda | null>(null);
   const [registrando, setRegistrando] = useState<Compromisso | null>(null);
   const [registrandoAtividade, setRegistrandoAtividade] = useState<Compromisso | null>(null);
-  const indiceHoje = [0, 1, 2, 3, 4].find((i) => somarDias(segunda, i) === hoje);
+  // Até o domingo: no fim de semana com faixa na escala, o dia exibido no celular é o de hoje (diaAtivo limita ao último visível).
+  const indiceHoje = [0, 1, 2, 3, 4, 5, 6].find((i) => somarDias(segunda, i) === hoje);
   const [diaMovel, setDiaMovel] = useState(indiceHoje ?? 0);
 
   function alterarUrl(mudar: (p: URLSearchParams) => void) {
@@ -116,7 +120,7 @@ export function AgendaPage() {
       tambem?.(p);
     });
     // Sempre pela diferença até a segunda de destino: indiceHoje é da semana em tela, não da semana de destino.
-    setDiaMovel(Math.max(0, Math.round((Date.parse(dia) - Date.parse(destino)) / 86_400_000)));
+    setDiaMovel(Math.max(0, diasEntre(destino, dia)));
   }
 
   function fecharNovo() {
@@ -164,8 +168,9 @@ export function AgendaPage() {
           semana.isPlaceholderData && "opacity-60",
         )}
       >
+        {/* Chega com surgir (ex.: após cancelar o último compromisso); sem subida, pois a grade já desliza na troca de semana. */}
         {semCompromissos && (
-          <p className="border-b border-borda px-4 py-2.5 text-denso text-suave">
+          <p className="animate-surgir border-b border-borda px-4 py-2.5 text-denso text-suave [--entrada-y:0]">
             Nenhum compromisso nesta semana. Use “Novo compromisso” para agendar.
           </p>
         )}
@@ -225,7 +230,10 @@ export function AgendaPage() {
             onChange={(e) => alterarUrl((p) => p.set("profissional", e.target.value))}
           >
             <option value={EQUIPE}>Toda a equipe</option>
-            {usuario && !profissionais.data?.some((p) => p.id === usuario.id) && <option value={usuario.id}>{usuario.nome}</option>}
+            {/* Fora da lista (o próprio usuário sem ser profissional, ou um inativo vindo do conflito de feriado): o select não pode cair em "Toda a equipe". */}
+            {visao !== EQUIPE && profissionais.data && !profissionais.data.some((p) => p.id === visao) && (
+              <option value={visao}>{visao === usuario?.id ? usuario.nome : "Profissional fora da lista"}</option>
+            )}
             {profissionais.data?.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nome}
@@ -250,8 +258,9 @@ export function AgendaPage() {
                 aria-pressed={i === diaAtivo}
                 onClick={() => setDiaMovel(i)}
                 className={cn(
-                  "flex-1 rounded-lg border py-2 text-rotulo font-semibold transition-colors duration-150 pointer-coarse:min-h-11",
-                  i === diaAtivo ? "border-primaria bg-primaria text-primaria-texto" : "border-borda bg-superficie text-texto",
+                  // min-w-0: com sete dias a 320 px o rótulo quebra em duas linhas em vez de alargar a página.
+                  "min-w-0 flex-1 cursor-pointer rounded-lg border py-2 text-rotulo font-semibold transition-colors duration-150 pointer-coarse:min-h-11",
+                  i === diaAtivo ? "border-primaria bg-primaria text-primaria-texto" : "border-borda bg-superficie text-texto hover:bg-realce",
                 )}
               >
                 {formatarDiaSemana(dia)}
@@ -269,7 +278,9 @@ export function AgendaPage() {
 
       <Modal aberto={formularioAberto} aoFechar={fecharNovo} titulo="Novo compromisso">
         {alunoUrl && fichaAluno.isPending ? (
-          <Skeleton className="h-40 w-full" />
+          <Carregando rotulo="Carregando aluno">
+            <Skeleton className="h-40 w-full" />
+          </Carregando>
         ) : (
           <>
             {alunoUrl && fichaAluno.isError && (

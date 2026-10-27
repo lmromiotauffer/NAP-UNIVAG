@@ -6,6 +6,7 @@ using Nap.Application.Features.Atividades.Commands;
 using Nap.Application.Features.Producao;
 using Nap.Application.Features.Producao.Commands;
 using Nap.Application.Features.Producao.Queries;
+using Nap.Application.Features.Usuarios;
 using Nap.Application.Tests.Fakes;
 using Nap.Domain.Agenda;
 using Nap.Domain.Alunos;
@@ -53,10 +54,16 @@ public class FechamentoTests
 
     private FecharSemanaHandler Fechar(IUsuarioAtual usuario, (Guid Id, string Perfil, bool Ativo)[] alvos)
     {
-        var usuarios = new UsuarioQueriesFalso(alvos.Where(a => a.Ativo).Select(a => a.Id).ToArray());
+        // Como a consulta real sem fatos na semana: só a equipe NAP entra, ativa ou não.
+        var usuarios = new UsuarioQueriesFalso(alvos.Where(a => a.Ativo && Perfis.EquipeNap.Contains(a.Perfil)).Select(a => a.Id).ToArray());
         usuarios.Usuarios.AddRange(alvos.Select(a => (a.Id, a.Perfil, (Guid?)null, a.Ativo)));
-        return new(new FecharSemanaValidator(), _fechamentos, _consultas, usuarios, usuario, new RelogioFixo(), _auditoria, _uow, _cache);
+        usuarios.Inativos.AddRange(alvos.Where(a => !a.Ativo && Perfis.EquipeNap.Contains(a.Perfil))
+            .Select(a => new ProfissionalProducaoDto(a.Id, "Usuário", false, null)));
+        return Fechar(usuario, usuarios);
     }
+
+    private FecharSemanaHandler Fechar(IUsuarioAtual usuario, UsuarioQueriesFalso usuarios) =>
+        new(new FecharSemanaValidator(), _fechamentos, _consultas, usuarios, usuario, new RelogioFixo(), _auditoria, _uow, _cache);
 
     private ReabrirSemanaHandler Reabrir(IUsuarioAtual usuario) =>
         new(new ReabrirSemanaValidator(), _fechamentos, usuario, new RelogioFixo(), _auditoria, _uow, _cache);
@@ -108,6 +115,20 @@ public class FechamentoTests
     }
 
     [Fact]
+    public async Task Coordenacao_fecha_semana_de_quem_saiu_da_equipe_mas_tem_producao_nela()
+    {
+        // A consulta da produção devolve quem tem fatos na semana, qualquer que seja o perfil atual (ex.: virou Gestão).
+        var exProfissional = Guid.NewGuid();
+        var usuarios = new UsuarioQueriesFalso(exProfissional);
+        usuarios.Usuarios.Add((exProfissional, Perfis.Gestao, null, true));
+
+        await Fechar(Coordenacao(), usuarios).Handle(new FecharSemanaCommand(exProfissional, SemanaEncerrada, false),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(Assert.Single(_fechamentos.Fechamentos).Fechada);
+    }
+
+    [Fact]
     public async Task Coordenacao_fecha_semana_de_profissional_inativo_mas_nao_de_outro_perfil()
     {
         var (inativo, sip) = (Guid.NewGuid(), Guid.NewGuid());
@@ -143,6 +164,17 @@ public class FechamentoTests
 
         await Fechar(usuario).Handle(new FecharSemanaCommand(usuario.Id, SemanaEncerrada, true), TestContext.Current.CancellationToken);
         Assert.True(Assert.Single(_fechamentos.Fechamentos).Fechada);
+    }
+
+    [Fact]
+    public async Task Fechar_com_compromisso_em_andamento_retorna_422_mesmo_confirmando()
+    {
+        var usuario = Profissional();
+        _consultas.EmAndamento = 1;
+        var ex = await Assert.ThrowsAsync<DomainException>(() => Fechar(usuario).Handle(
+            new FecharSemanaCommand(usuario.Id, SemanaEncerrada, true), TestContext.Current.CancellationToken));
+        Assert.Equal(FecharSemanaHandler.MensagemEmAndamento, ex.Message);
+        Assert.Empty(_fechamentos.Fechamentos);
     }
 
     [Fact]
@@ -214,7 +246,8 @@ public class FechamentoTests
         var usuario = Profissional();
         SemanaFechada(usuario.Id);
         var handler = new RegistrarAtividadeHandler(new RegistrarAtividadeValidator(), _atividades, _agenda, new CursoQueriesFalso(),
-            new UsuarioQueriesFalso(), usuario, new RelogioFixo(), _auditoria, _uow, _cache, Servico());
+            new UsuarioQueriesFalso(), usuario, new RelogioFixo(), _auditoria, _uow, _cache, Servico(),
+            new ServicoEscala(new EscalaRepositoryEmMemoria(), new FeriadoRepositoryEmMemoria(), new RelogioFixo()));
 
         await Assert.ThrowsAsync<DomainException>(() => handler.Handle(new RegistrarAtividadeCommand(null, null, NaSemanaFechada,
             NaSemanaFechada.AddHours(1), null, TipoAtividade.RodaConversa, "Roda de conversa", "Atividade sem agendamento prévio"),
@@ -228,7 +261,7 @@ public class FechamentoTests
         var usuario = Profissional();
         SemanaFechada(usuario.Id);
         var c = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião", IntervaloHorario.Criar(NaSemanaFechada, NaSemanaFechada.AddHours(1)),
-            usuario.Id, null, null, usuario.Id, NaSemanaFechada.AddDays(-3));
+            usuario.Id, null, null, usuario.Id);
         _agenda.Adicionar(c);
         var handler = new CancelarCompromissoHandler(new CancelarCompromissoValidator(), _agenda, usuario, new RelogioFixo(), _auditoria,
             _uow, _cache, Servico());
@@ -236,6 +269,43 @@ public class FechamentoTests
         await Assert.ThrowsAsync<DomainException>(() => handler.Handle(new CancelarCompromissoCommand(c.Id, "Não ocorreu", "v1"),
             TestContext.Current.CancellationToken));
         Assert.Equal(EstadoCompromisso.Agendado, c.Estado);
+    }
+
+    [Fact]
+    public async Task Intervalo_que_termina_a_meia_noite_de_segunda_nao_toca_a_semana_fechada_que_comeca()
+    {
+        // Fuso do RelogioFixo é UTC. Semana de 14/09 aberta; a de 21/09 fechada.
+        var usuario = Profissional();
+        SemanaFechada(usuario.Id);
+        var domingo = new DateTimeOffset(2026, 9, 20, 22, 0, 0, TimeSpan.Zero);
+
+        await Servico().ExigirSemanaAbertaAsync(usuario.Id, IntervaloHorario.Criar(domingo, domingo.AddHours(2)), TestContext.Current.CancellationToken);
+        var ex = await Assert.ThrowsAsync<DomainException>(() =>
+            Servico().ExigirSemanaAbertaAsync(usuario.Id, IntervaloHorario.Criar(domingo, domingo.AddHours(2).AddMinutes(1)), TestContext.Current.CancellationToken));
+        Assert.Equal(ServicoFechamento.MensagemSemanaFechada, ex.Message);
+    }
+
+    [Fact]
+    public async Task Semana_fechada_bloqueia_cancelar_bloqueio_em_andamento_mas_nao_reuniao_em_andamento()
+    {
+        // Relógio fixo: 02/10 15:00Z. A semana de 28/09 é fechada só aqui (DepoisDeTudo); os dois começaram às 10h e vão até as 20h.
+        var usuario = Profissional();
+        SemanaFechada(usuario.Id, new DateOnly(2026, 9, 28));
+        var inicio = new DateTimeOffset(2026, 10, 2, 10, 0, 0, TimeSpan.Zero);
+        var bloqueio = Compromisso.Criar(TipoCompromisso.Bloqueio, "Bloqueio", IntervaloHorario.Criar(inicio, inicio.AddHours(10)), usuario.Id, null, null, usuario.Id);
+        var reuniao = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião", IntervaloHorario.Criar(inicio, inicio.AddHours(10)), usuario.Id, null, null, usuario.Id);
+        _agenda.Adicionar(bloqueio);
+        _agenda.Adicionar(reuniao);
+        var handler = new CancelarCompromissoHandler(new CancelarCompromissoValidator(), _agenda, usuario, new RelogioFixo(), _auditoria,
+            _uow, _cache, Servico());
+
+        var ex = await Assert.ThrowsAsync<DomainException>(() => handler.Handle(new CancelarCompromissoCommand(bloqueio.Id, "Não precisa mais", "v1"),
+            TestContext.Current.CancellationToken));
+        Assert.Equal(ServicoFechamento.MensagemSemanaFechada, ex.Message);
+        Assert.Equal(EstadoCompromisso.Agendado, bloqueio.Estado);
+
+        await handler.Handle(new CancelarCompromissoCommand(reuniao.Id, "Não ocorreu", "v1"), TestContext.Current.CancellationToken);
+        Assert.Equal(EstadoCompromisso.Cancelado, reuniao.Estado);
     }
 
     [Fact]
@@ -281,7 +351,7 @@ public class FechamentoTests
     private Compromisso Reuniao(Guid profissionalId, DateTimeOffset inicio, TipoCompromisso tipo = TipoCompromisso.ReuniaoEquipe)
     {
         var c = Compromisso.Criar(tipo, "Reunião", IntervaloHorario.Criar(inicio, inicio.AddHours(1)), profissionalId, null, null,
-            profissionalId, inicio.AddDays(-3));
+            profissionalId);
         _agenda.Adicionar(c);
         return c;
     }
@@ -294,7 +364,7 @@ public class FechamentoTests
         var usuario = Profissional();
         SemanaFechada(usuario.Id);
         var c = Reuniao(usuario.Id, NaSemanaFechada);
-        var handler = new RemarcarCompromissoHandler(new RemarcarCompromissoValidator(), _agenda, usuario, new RelogioFixo(), _auditoria,
+        var handler = new RemarcarCompromissoHandler(new RemarcarCompromissoValidator(), _agenda, usuario, _auditoria,
             _uow, _cache, Escala(), Servico());
 
         var ex = await Assert.ThrowsAsync<DomainException>(() => handler.Handle(
@@ -309,7 +379,7 @@ public class FechamentoTests
         var usuario = Profissional();
         SemanaFechada(usuario.Id);
         var handler = new CriarCompromissoHandler(new CriarCompromissoValidator(), _agenda, _alunos, new UsuarioQueriesFalso(), usuario,
-            new RelogioFixo(), _auditoria, _uow, _cache, Escala(), Servico());
+            _auditoria, _uow, _cache, Escala(), Servico());
 
         var ex = await Assert.ThrowsAsync<DomainException>(() => handler.Handle(new CriarCompromissoCommand(TipoCompromisso.Bloqueio,
             "Bloqueio", NaSemanaFechada, NaSemanaFechada.AddHours(1), null, null, null), TestContext.Current.CancellationToken));
@@ -317,8 +387,24 @@ public class FechamentoTests
         Assert.Empty(_agenda.Compromissos);
     }
 
+    [Fact]
+    public async Task Semana_fechada_bloqueia_bloqueio_que_comeca_na_semana_anterior_e_entra_nela()
+    {
+        // Domingo 22h até segunda 3h: o início cai na semana aberta, mas a segunda (fechada) perde capacidade.
+        var usuario = Profissional();
+        SemanaFechada(usuario.Id);
+        var domingo = new DateTimeOffset(2026, 9, 20, 22, 0, 0, TimeSpan.Zero);
+        var handler = new CriarCompromissoHandler(new CriarCompromissoValidator(), _agenda, _alunos, new UsuarioQueriesFalso(), usuario,
+            _auditoria, _uow, _cache, Escala(), Servico());
+
+        var ex = await Assert.ThrowsAsync<DomainException>(() => handler.Handle(new CriarCompromissoCommand(TipoCompromisso.Bloqueio,
+            "Bloqueio", domingo, domingo.AddHours(5), null, null, null), TestContext.Current.CancellationToken));
+        Assert.Equal(ServicoFechamento.MensagemSemanaFechada, ex.Message);
+        Assert.Empty(_agenda.Compromissos);
+    }
+
     private RegistrarRealizacaoHandler Realizacao(IUsuarioAtual usuario) =>
-        new(new RegistrarRealizacaoValidator(), _agenda, usuario, new RelogioFixo(), _auditoria, _uow, _cache, Servico());
+        new(new RegistrarRealizacaoValidator(), _agenda, usuario, new RelogioFixo(), _auditoria, _uow, _cache, Servico(), Escala());
 
     [Fact]
     public async Task Realizacao_e_bloqueada_se_so_a_data_efetiva_cai_em_semana_fechada()
@@ -352,7 +438,7 @@ public class FechamentoTests
         var usuario = Profissional();
         SemanaFechada(usuario.Id);
         var c = Compromisso.Criar(TipoCompromisso.Atendimento, "Atendimento", IntervaloHorario.Criar(NaSemanaFechada, NaSemanaFechada.AddHours(1)),
-            usuario.Id, _aluno.Id, null, usuario.Id, NaSemanaFechada.AddDays(-3));
+            usuario.Id, _aluno.Id, null, usuario.Id);
         _agenda.Adicionar(c);
         var handler = new RegistrarAtendimentoHandler(new RegistrarAtendimentoValidator(), _atendimentos, _agenda, _alunos,
             new UsuarioQueriesFalso(), usuario, new RelogioFixo(), _auditoria, _uow, _cache, Escala(), Servico());
@@ -373,7 +459,8 @@ public class FechamentoTests
             TipoAtividade.RodaConversa, "Roda de conversa", "Atividade sem agendamento", usuario.Id, NaSemanaAberta.AddHours(2));
         _atividades.Adicionar(a);
         var handler = new CorrigirAtividadeHandler(new CorrigirAtividadeValidator(), _atividades, new AtividadeQueriesFalso(), _agenda,
-            new CursoQueriesFalso(), usuario, new RelogioFixo(), _auditoria, _uow, _cache, Servico());
+            new CursoQueriesFalso(), usuario, new RelogioFixo(), _auditoria, _uow, _cache, Servico(),
+            new ServicoEscala(new EscalaRepositoryEmMemoria(), new FeriadoRepositoryEmMemoria(), new RelogioFixo()));
 
         var ex = await Assert.ThrowsAsync<DomainException>(() => handler.Handle(new CorrigirAtividadeCommand(a.Id, "v1", NaSemanaFechada,
             NaSemanaFechada.AddHours(1), null, TipoAtividade.RodaConversa, "Roda de conversa", "Ajuste de data"),
@@ -386,7 +473,8 @@ public class FechamentoTests
     {
         var usuario = Profissional();
         var coord = Coordenacao();
-        await Servico().ExigirSemanaAbertaAsync(usuario.Id, NaSemanaAberta, TestContext.Current.CancellationToken);
+        await Servico().ExigirSemanaAbertaAsync(usuario.Id, IntervaloHorario.Criar(NaSemanaAberta, NaSemanaAberta.AddHours(1)),
+            TestContext.Current.CancellationToken);
         Assert.Equal([(usuario.Id, false)], _fechamentos.Bloqueios);
 
         _fechamentos.Bloqueios.Clear();

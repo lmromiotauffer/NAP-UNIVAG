@@ -33,13 +33,29 @@ public sealed class AgendaRepositoryEmMemoria(List<string>? ordem = null, List<A
     public Task<bool> ExisteConflitoAsync(Guid profissionalId, Guid? alunoId, IntervaloHorario intervalo, Guid? ignorarId, CancellationToken ct)
     {
         ordem?.Add("conflito");
-        var compromisso = Compromissos.Any(c => c.Id != ignorarId && c.Estado == EstadoCompromisso.Agendado
+        return ConflitaAsync(profissionalId, alunoId, intervalo, id => id == ignorarId);
+    }
+
+    private Task<bool> ConflitaAsync(Guid profissionalId, Guid? alunoId, IntervaloHorario intervalo, Func<Guid, bool> ignorado)
+    {
+        var compromisso = Compromissos.Any(c => !ignorado(c.Id) && c.Estado == EstadoCompromisso.Agendado
             && c.Tipo.OcupaHorario() && c.Intervalo.Inicio < intervalo.Fim && intervalo.Inicio < c.Intervalo.Fim
             && (c.ProfissionalId == profissionalId || (alunoId is not null && c.AlunoId == alunoId)));
-        var atendimento = (atendimentos ?? []).Any(a => a.Id != ignorarId
+        var atendimento = (atendimentos ?? []).Any(a => !ignorado(a.Id)
             && a.Estado is EstadoAtendimento.Realizado or EstadoAtendimento.Ausente && a.Intervalo.Inicio < intervalo.Fim && intervalo.Inicio < a.Intervalo.Fim
             && (a.ProfissionalId == profissionalId || (alunoId is not null && a.AlunoId == alunoId)));
         return Task.FromResult(compromisso || atendimento);
+    }
+
+    public async Task<IReadOnlyList<Guid>> ProfissionaisComConflitoAsync(IReadOnlyCollection<Guid> profissionaisIds, IntervaloHorario intervalo,
+        IReadOnlyCollection<Guid> ignorarIds, CancellationToken ct)
+    {
+        // Uma entrada em ordem por chamada, como o repositório real faz uma checagem para o grupo.
+        ordem?.Add("conflito");
+        var com = new List<Guid>();
+        foreach (var id in profissionaisIds)
+            if (await ConflitaAsync(id, null, intervalo, ignorarIds.Contains)) com.Add(id);
+        return com;
     }
 
     public Task<IReadOnlyList<ConflitoAgendaDto>> ListarConflitosAsync(Guid profissionalId, IntervaloHorario intervalo, Guid? ignorarId, CancellationToken ct) =>

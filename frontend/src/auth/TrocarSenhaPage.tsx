@@ -93,7 +93,7 @@ export function TrocarSenhaPage() {
             Sair
           </Button>
         ) : (
-          <Link to="/" className="text-center text-sm font-semibold text-primaria">
+          <Link to="/" className="inline-flex items-center justify-center text-sm font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
             Cancelar
           </Link>
         )}

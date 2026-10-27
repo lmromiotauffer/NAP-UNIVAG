@@ -12,10 +12,12 @@ public sealed class RevogarAutorizacaoForaEscalaHandler(IEscalaRepository escala
     public async Task Handle(RevogarAutorizacaoForaEscalaCommand comando, CancellationToken ct = default)
     {
         RegrasAlcada.ExigirAdministracao(usuario);
-        var autorizacao = await escalas.ObterAutorizacaoAsync(comando.Id, ct) ?? throw new NotFoundException("Autorização");
+        var profissionalId = await escalas.ProfissionalDaAutorizacaoAsync(comando.Id, ct) ?? throw new NotFoundException("Autorização");
         await uow.EmTransacaoAsync(async tct =>
         {
-            await agenda.BloquearAgendasAsync(autorizacao.ProfissionalId, null, tct);
+            await agenda.BloquearAgendasAsync(profissionalId, null, tct);
+            // Lida só depois da trava: duas revogações simultâneas não passam ambas pela checagem de "já revogada".
+            var autorizacao = await escalas.ObterAutorizacaoAsync(comando.Id, tct) ?? throw new NotFoundException("Autorização");
             autorizacao.Revogar(relogio.Agora);
             auditoria.Registrar("escala.autorizacao.revogar", "AutorizacaoForaEscala", autorizacao.Id);
             await uow.SalvarAsync(tct);

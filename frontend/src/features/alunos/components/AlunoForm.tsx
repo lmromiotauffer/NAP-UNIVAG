@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { Dado } from "../../../components/ui/Dado";
 import { Field } from "../../../components/ui/Field";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
@@ -17,6 +18,7 @@ import { useAtualizarAluno, useCriarAluno } from "../hooks/useAlunos";
 const textoOpcional = z
   .string()
   .trim()
+  .max(4000, "Use no máximo 4000 caracteres.")
   .transform((v) => (v === "" ? null : v));
 
 const esquema = z.object({
@@ -36,6 +38,7 @@ const esquema = z.object({
   profissionalResponsavelId: z.guid("Selecione o profissional responsável."),
   necessidadesEducacionais: textoOpcional,
   observacoesAcademicas: textoOpcional,
+  matriculaAtiva: z.boolean(),
 });
 type Entrada = z.input<typeof esquema>;
 type Saida = z.output<typeof esquema>;
@@ -73,11 +76,12 @@ export function AlunoForm({
       nomeCompleto: aluno?.nome ?? "",
       matricula: aluno?.matricula ?? "",
       cursoId: aluno?.cursoId ?? "",
-      semestre: aluno ? String(aluno.semestre) : "",
+      semestre: aluno?.semestre != null ? String(aluno.semestre) : "",
       inicioAcompanhamento: aluno?.inicioAcompanhamento ?? "",
       profissionalResponsavelId: aluno?.profissionalId ?? "",
       necessidadesEducacionais: aluno?.necessidadesEducacionais ?? "",
       observacoesAcademicas: aluno?.observacoesAcademicas ?? "",
+      matriculaAtiva: aluno?.matriculaAtiva ?? true,
     },
   });
 
@@ -85,10 +89,10 @@ export function AlunoForm({
     setErroGeral(null);
     try {
       if (aluno) {
-        const { nomeCompleto, semestre, necessidadesEducacionais, observacoesAcademicas, profissionalResponsavelId } = dados;
+        const { nomeCompleto, semestre, necessidadesEducacionais, observacoesAcademicas, profissionalResponsavelId, matriculaAtiva } = dados;
         await atualizar.mutateAsync({
           id: aluno.id,
-          body: { nomeCompleto, semestre, necessidadesEducacionais, observacoesAcademicas, profissionalResponsavelId },
+          body: { nomeCompleto, semestre, necessidadesEducacionais, observacoesAcademicas, profissionalResponsavelId, matriculaAtiva },
           versao: versao ?? aluno.versao,
         });
         aoConcluir(aluno.id);
@@ -115,18 +119,11 @@ export function AlunoForm({
       </Field>
       {edicao ? (
         <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-xs text-suave">Matrícula</dt>
-            <dd className="tabular-nums">{aluno.matricula}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-suave">Curso</dt>
-            <dd>{aluno.curso}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-suave">Início do acompanhamento</dt>
-            <dd>{formatarDataCivil(aluno.inicioAcompanhamento)}</dd>
-          </div>
+          <Dado rotulo="Matrícula" classeValor="tabular-nums">
+            {aluno.matricula}
+          </Dado>
+          <Dado rotulo="Curso">{aluno.curso}</Dado>
+          <Dado rotulo="Início do acompanhamento">{formatarDataCivil(aluno.inicioAcompanhamento)}</Dado>
         </dl>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -155,6 +152,12 @@ export function AlunoForm({
           </Field>
         )}
       </div>
+      {edicao && (
+        <label className="flex cursor-pointer items-center gap-2 text-sm pointer-coarse:min-h-11">
+          <input type="checkbox" className="size-4 accent-primaria" {...register("matriculaAtiva")} />
+          Matrícula ativa
+        </label>
+      )}
       <Field rotulo="Profissional responsável" erro={errors.profissionalResponsavelId?.message} obrigatorio>
         <Select {...register("profissionalResponsavelId")}>
           <option value="">{profissionais.isPending ? "Carregando…" : "Selecione"}</option>

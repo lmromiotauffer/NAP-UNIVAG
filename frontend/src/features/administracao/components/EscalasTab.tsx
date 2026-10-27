@@ -16,7 +16,7 @@ import { classeMolduraRolavel, Table, th, td } from "../../../components/ui/Tabl
 import { useToast } from "../../../components/ui/Toast";
 import { tratarErro } from "../../../lib/api";
 import { cn } from "../../../lib/cn";
-import { formatarDataCivil, hojeCivil } from "../../../lib/format";
+import { DIA, formatarDataCivil, hojeCivil } from "../../../lib/format";
 import type { EscalaProfissional } from "../../../lib/types";
 import { useProfissionais } from "../../compartilhado/catalogos";
 import { useEncerrarVigenciaEscala, useListaEscalas } from "../hooks/useAdministracao";
@@ -25,7 +25,7 @@ import { EscalaForm } from "./EscalaForm";
 import { previaEscala } from "./previaEscala";
 
 
-const esquemaVigencia = z.object({ vigenciaFim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe o último dia da vigência.") });
+const esquemaVigencia = z.object({ vigenciaFim: z.string().regex(DIA, "Informe o último dia da vigência.") });
 type DadosVigencia = z.infer<typeof esquemaVigencia>;
 
 /** Encerrar a vigência é editar o fim dela: a escala deixa de valer depois da data e o profissional pode ganhar uma nova. */
@@ -62,7 +62,7 @@ function EncerrarVigenciaDialog({ escala, aoFechar, aoConcluir }: { escala: Esca
         <p className="m-0 text-sm">
           Escala de {escala.profissional}, em vigor desde {formatarDataCivil(escala.vigenciaInicio)}. Compromissos já agendados não mudam.
         </p>
-        {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+        {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
         <Field rotulo="Último dia de vigência" erro={errors.vigenciaFim?.message} obrigatorio>
           <Input type="date" min={escala.vigenciaInicio} {...register("vigenciaFim")} />
         </Field>
@@ -102,6 +102,13 @@ export function EscalasTab() {
         icone={<CalendarClock />}
         titulo={profissionalId ? "Nenhuma escala para este profissional" : "Nenhuma escala cadastrada"}
         descricao="Sem escala própria, o profissional segue o padrão do sistema: segunda a sexta, das 07h às 17h, com sexta sinalizada como sem atendimento."
+        acao={
+          !!profissionalId && (
+            <Button variante="secundaria" tamanho="sm" onClick={() => setProfissionalId("")}>
+              Limpar filtros
+            </Button>
+          )
+        }
       />
     );
   } else {
@@ -124,7 +131,7 @@ export function EscalasTab() {
                   <td className={td}>
                     <span className="font-semibold">{e.profissional}</span>
                   </td>
-                  <td className={td}>
+                  <td className={cn(td, "tabular-nums")}>
                     {e.vigenciaFim ? `${formatarDataCivil(e.vigenciaInicio)} a ${formatarDataCivil(e.vigenciaFim)}` : `Desde ${formatarDataCivil(e.vigenciaInicio)}, sem término`}
                   </td>
                   <td className={td}>{previaEscala(e.faixas)}</td>
@@ -160,17 +167,20 @@ export function EscalasTab() {
     <>
       {/* Mesma barra das outras listagens (Usuários, Auditoria): pílula com o rótulo dentro, visível só para leitores de tela. */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <label htmlFor="escalas-profissional" className="sr-only">
-          Profissional
-        </label>
-        <Select id="escalas-profissional" className={classeFiltro} value={profissionalId} onChange={(e) => setProfissionalId(e.target.value)}>
-          <option value="">Profissional: todos</option>
-          {profissionais.data?.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nome}
-            </option>
-          ))}
-        </Select>
+        {/* basis-full no celular: o filtro ocupa a linha inteira e o botão desce; a partir de `sm` dividem a linha. */}
+        <div role="search" aria-label="Filtrar escalas" className="flex min-w-0 grow basis-full flex-wrap items-center gap-2 sm:basis-0">
+          <label htmlFor="escalas-profissional" className="sr-only">
+            Profissional
+          </label>
+          <Select id="escalas-profissional" className={classeFiltro} value={profissionalId} onChange={(e) => setProfissionalId(e.target.value)}>
+            <option value="">Profissional: todos</option>
+            {profissionais.data?.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </Select>
+        </div>
         <Button onClick={() => setNova(true)} className="rounded-full">
           <Plus aria-hidden="true" className="size-4" />
           Nova escala

@@ -15,6 +15,10 @@ public sealed class ProducaoQueriesFalso : IProducaoQueries
 
     public Task<int> ContarPendentesAsync(Guid profissionalId, DateOnly semana, CancellationToken ct) => Task.FromResult(Pendentes);
 
+    public int EmAndamento { get; set; }
+
+    public Task<int> ContarEmAndamentoAsync(Guid profissionalId, DateOnly semana, CancellationToken ct) => Task.FromResult(EmAndamento);
+
     public Task<IReadOnlyList<SemanaProducaoDto>> ListarSemanasAsync(IReadOnlyList<ProfissionalDto> profissionais, DateOnly inicio,
         DateOnly fim, CancellationToken ct)
     {

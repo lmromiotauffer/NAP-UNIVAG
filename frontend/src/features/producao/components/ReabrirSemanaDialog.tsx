@@ -50,7 +50,7 @@ export function ReabrirSemanaDialog({ semana, aoConcluir, aoCancelar }: { semana
       <p className="text-sm text-suave">
         Semana de {formatarDataCivil(semana.semana)} a {formatarDataCivil(somarDias(semana.semana, 6))}, {semana.profissional}. A reabertura fica registrada no histórico.
       </p>
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       <Field rotulo="Justificativa" erro={errors.justificativa?.message} obrigatorio>
         <Textarea maxLength={500} {...register("justificativa")} />
       </Field>

@@ -1,5 +1,5 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { INVALIDAR_APOS_AGENDA, queryKeys } from "../../../lib/queryKeys";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { INVALIDAR_APOS_AGENDA, queryKeys, useInvalidar } from "../../../lib/queryKeys";
 import {
   producaoService,
   type CorrigirRealizacaoBody,
@@ -20,18 +20,18 @@ export function useProducao(f: FiltroProducao) {
 }
 
 export function useRegistrarRealizacao() {
-  const qc = useQueryClient();
+  const invalidar = useInvalidar(INVALIDAR_APOS_AGENDA);
   return useMutation({
     mutationFn: ({ id, body, versao }: { id: string; body: RegistrarRealizacaoBody; versao: string }) => producaoService.registrarRealizacao(id, body, versao),
-    onSettled: () => Promise.all(INVALIDAR_APOS_AGENDA.map((queryKey) => qc.invalidateQueries({ queryKey }))),
+    onSettled: invalidar,
   });
 }
 
 export function useCorrigirRealizacao() {
-  const qc = useQueryClient();
+  const invalidar = useInvalidar(INVALIDAR_APOS_AGENDA);
   return useMutation({
     mutationFn: ({ id, body, versao }: { id: string; body: CorrigirRealizacaoBody; versao: string }) => producaoService.corrigirRealizacao(id, body, versao),
-    onSettled: () => Promise.all(INVALIDAR_APOS_AGENDA.map((queryKey) => qc.invalidateQueries({ queryKey }))),
+    onSettled: invalidar,
   });
 }
 
@@ -44,8 +44,8 @@ export function useAjustesProducao(f: FiltroAjustes) {
 }
 
 function useMutacaoFechamento<V>(fn: (v: V) => Promise<unknown>) {
-  const qc = useQueryClient();
-  return useMutation({ mutationFn: fn, onSettled: () => Promise.all(INVALIDAR_APOS_FECHAMENTO.map((queryKey) => qc.invalidateQueries({ queryKey }))) });
+  const invalidar = useInvalidar(INVALIDAR_APOS_FECHAMENTO);
+  return useMutation({ mutationFn: fn, onSettled: invalidar });
 }
 
 export const useFecharSemana = () => useMutacaoFechamento((body: FecharSemanaBody) => producaoService.fecharSemana(body));

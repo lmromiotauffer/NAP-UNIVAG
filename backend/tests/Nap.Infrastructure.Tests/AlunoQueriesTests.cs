@@ -198,6 +198,13 @@ public class AlunoQueriesTests(SqlServerFixture fx)
             a.AlterarSituacao(SituacaoAluno.Ativo, "Motivo do curso antigo", prof, agora.AddDays(-2));
             a.TransferirCurso(cursoNovo, new DateOnly(2026, 10, 4), "Motivo da transferência", prof, agora.AddDays(-1));
             a.AlterarSituacao(SituacaoAluno.EmAcompanhamento, "Motivo do curso novo", prof, agora);
+            // Encaminhamento do período antigo com retorno registrado depois da transferência: o retorno é do período novo.
+            var hoje = DateOnly.FromDateTime(agora.UtcDateTime);
+            var encaminhamento = Encaminhamento.Criar(aluno.Id, cursoAntigo, prof, Especialidade.Psicologia, DestinoEncaminhamento.Sip,
+                hoje.AddDays(-2), "motivo", "resumo", null, hoje.AddDays(-2), agora.AddDays(-2));
+            encaminhamento.RegistrarRetorno(AcaoRetorno.Acolhimento, hoje, "Acolhido", prof, hoje, agora);
+            encaminhamento.LimparEventos();
+            db.Encaminhamentos.Add(encaminhamento);
             await db.SaveChangesAsync(ct);
         }
 
@@ -206,11 +213,22 @@ public class AlunoQueriesTests(SqlServerFixture fx)
         var antigo = new EscopoAlunos(cursoAntigo, false);
 
         // A ficha segue alcançável (o link do encaminhamento gravado com o curso antigo não morre), sem o resumo clínico.
+        // Nada do estado atual, definido depois da transferência: curso novo, profissional, situação e textos vêm vazios.
         var ficha = await consultas.ObterFichaAsync(aluno.Id, antigo, ct);
         Assert.NotNull(ficha);
         Assert.Null(ficha.Resumo);
-        Assert.Contains((await consultas.ListarAsync(new FiltroAlunos(null, null, null, null, null, null, 1, 50), antigo, ct)).Itens,
+        Assert.Equal((null, "", null, "", (SituacaoAluno?)null, (string?)null, (string?)null, (int?)null, (bool?)null),
+            (ficha.CursoId, ficha.Curso, ficha.ProfissionalId, ficha.Profissional, ficha.Situacao, ficha.NecessidadesEducacionais,
+                ficha.ObservacoesAcademicas, ficha.Semestre, ficha.MatriculaAtiva));
+        var item = Assert.Single((await consultas.ListarAsync(new FiltroAlunos(null, null, null, null, null, null, 1, 50), antigo, ct)).Itens,
             i => i.Id == aluno.Id);
+        Assert.Equal((null, "", null, "", (SituacaoAluno?)null, (int?)null, (bool?)null),
+            (item.CursoId, item.Curso, item.ProfissionalId, item.Profissional, item.Situacao, item.Semestre, item.MatriculaAtiva));
+        // Nem por filtro: a situação atual não pode ser deduzida pela lista.
+        Assert.DoesNotContain((await consultas.ListarAsync(new FiltroAlunos(null, null, null, SituacaoAluno.EmAcompanhamento, null, null,
+            1, 50), antigo, ct)).Itens, i => i.Id == aluno.Id);
+        // O coordenador do curso atual vê o estado atual.
+        Assert.Equal(SituacaoAluno.EmAcompanhamento, (await consultas.ObterFichaAsync(aluno.Id, new EscopoAlunos(cursoNovo, false), ct))!.Situacao);
 
         // Linha do tempo: só o período dele, até a transferência (o vínculo seguinte já é período de outro coordenador).
         var linha = (await consultas.LinhaDoTempoAsync(aluno.Id, antigo, 1, 20, ct))!;
@@ -218,11 +236,33 @@ public class AlunoQueriesTests(SqlServerFixture fx)
         Assert.NotEmpty(linha.Itens);
         Assert.All(linha.Itens, e => Assert.True(e.Em < agora.AddDays(-1)));
         Assert.DoesNotContain(linha.Itens, e => e.Titulo.Contains("Curso novo"));
+        Assert.Contains(linha.Itens, e => e.Tipo == "encaminhamento"); // a criação, no período dele, continua
         Assert.All(linha.Itens, e => Assert.Null(e.Resumo));
 
         // O coordenador do curso atual continua vendo só a partir da transferência.
         var novo = (await consultas.LinhaDoTempoAsync(aluno.Id, new EscopoAlunos(cursoNovo, false), 1, 20, ct))!;
         Assert.All(novo.Itens, e => Assert.True(e.Em >= agora.AddDays(-1)));
+    }
+
+    [Fact]
+    public async Task Vinculo_de_duracao_zero_nao_da_acesso_ao_coordenador()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var prof = await fx.CriarProfissionalAsync();
+        var cursoErrado = await fx.CriarCursoAsync("Curso cadastrado por engano");
+        var cursoCerto = await fx.CriarCursoAsync("Curso corrigido no mesmo dia");
+        var aluno = await RoundTripTests.CriarAlunoAsync(fx, cursoErrado, prof);
+        await using (var db = fx.CriarContexto())
+        {
+            var a = (await new Persistencia.Repositorios.AlunoRepository(db).ObterAsync(aluno.Id, ct))!;
+            a.TransferirCurso(cursoCerto, a.InicioAcompanhamento, "Correção do curso", prof, DateTimeOffset.UtcNow);
+            await db.SaveChangesAsync(ct);
+        }
+
+        await using var leitura = fx.CriarContexto();
+        var consultas = new AlunoQueries(leitura);
+        Assert.Null(await consultas.ObterFichaAsync(aluno.Id, new EscopoAlunos(cursoErrado, false), ct));
+        Assert.NotNull(await consultas.ObterFichaAsync(aluno.Id, new EscopoAlunos(cursoCerto, false), ct));
     }
 
     [Fact]

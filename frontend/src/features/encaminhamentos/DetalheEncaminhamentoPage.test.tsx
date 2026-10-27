@@ -7,12 +7,16 @@ import { SessaoContexto, type ContextoSessao } from "../../auth/useSessao";
 import { ToastProvider } from "../../components/ui/Toast";
 import { hojeCivil, somarDias } from "../../lib/format";
 import type { EncaminhamentoDetalhe } from "../../lib/types";
+import { comunicacaoService } from "../comunicacoes/services/comunicacaoService";
 import { DetalheEncaminhamentoPage } from "./DetalheEncaminhamentoPage";
 import { encaminhamentoService } from "./services/encaminhamentoService";
 
 vi.mock("./services/encaminhamentoService", () => ({ encaminhamentoService: { obter: vi.fn() } }));
 
+vi.mock("../comunicacoes/services/comunicacaoService", () => ({ comunicacaoService: { caixa: vi.fn() } }));
+
 const obter = vi.mocked(encaminhamentoService.obter);
+const caixa = vi.mocked(comunicacaoService.caixa);
 
 const base: EncaminhamentoDetalhe = {
   id: "e1",
@@ -70,6 +74,8 @@ const nomesAcoes = () =>
 
 beforeEach(() => {
   obter.mockReset();
+  caixa.mockReset();
+  caixa.mockResolvedValue({ itens: [], pagina: 1, tamanho: 10, total: 0 });
 });
 
 describe("DetalheEncaminhamentoPage", () => {
@@ -123,5 +129,11 @@ describe("DetalheEncaminhamentoPage", () => {
     montar(base, "Sip");
     await screen.findByRole("heading", { name: "Maria Clara Souza" });
     expect(screen.queryByRole("link", { name: "Maria Clara Souza" })).not.toBeInTheDocument();
+  });
+
+  it("Comunicacoes_listam_as_mensagens_do_encaminhamento", async () => {
+    montar(base);
+    expect(await screen.findByRole("heading", { name: "Comunicações" })).toBeInTheDocument();
+    expect(caixa).toHaveBeenCalledWith(expect.objectContaining({ caixa: "Entrada", encaminhamentoId: "e1" }));
   });
 });

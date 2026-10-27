@@ -12,6 +12,8 @@ public class UsuarioIdentidade : IdentityUser<Guid>
     public bool Ativo { get; set; }
     /// <summary>Data civil (fuso institucional) da última desativação; nula se ativo ou desativado antes deste campo existir.</summary>
     public DateOnly? DesativadoEm { get; set; }
+    /// <summary>Data civil da reativação; fica junto com <see cref="DesativadoEm"/> para marcar o período sem capacidade.</summary>
+    public DateOnly? ReativadoEm { get; set; }
     /// <summary>Data civil (fuso institucional) da criação; nula para usuários criados antes deste campo existir (sem limite).</summary>
     public DateOnly? AtivoDesde { get; set; }
     public bool DeveTrocarSenha { get; set; }

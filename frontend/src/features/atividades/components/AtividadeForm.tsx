@@ -4,17 +4,19 @@ import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { z } from "zod";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { Dado } from "../../../components/ui/Dado";
 import { Field } from "../../../components/ui/Field";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { Textarea } from "../../../components/ui/Textarea";
 import { tratarErro } from "../../../lib/api";
-import { diaCivil, formatarData, formatarHora, hojeCivil, HORA, horaCivil, instanteCivil } from "../../../lib/format";
+import { diaCivil, formatarData, formatarIntervalo, hojeCivil, HORA, horaCivil, instanteCivil } from "../../../lib/format";
 import type { Compromisso } from "../../../lib/types";
 import { CAMPO_DA_API } from "../../agenda/components/CompromissoForm";
 import { useCursos, useProfissionais } from "../../compartilhado/catalogos";
 import { useRegistrarAtividade } from "../hooks/useAtividades";
-import { ehTipoAtividade, ROTULO_TIPO_ATIVIDADE, TIPOS_ATIVIDADE } from "../rotulos";
+import { entre } from "../../../lib/entre";
+import { ROTULO_TIPO_ATIVIDADE, TIPOS_ATIVIDADE } from "../rotulos";
 import type { RegistrarAtividadeBody } from "../services/atividadeService";
 
 type CampoComum = "data" | "inicio" | "fim" | "cursoId" | "tipo" | "descricao";
@@ -23,7 +25,7 @@ type ValoresComuns = Record<CampoComum, string>;
 /** Regras de formato e de horário comuns ao registro e à correção; o resto (escopo, conflito) é da API. */
 export function verificarAtividade(v: ValoresComuns, ctx: z.RefinementCtx) {
   const erro = (path: CampoComum, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
-  if (!ehTipoAtividade(v.tipo)) erro("tipo", "Selecione o tipo.");
+  if (!entre(TIPOS_ATIVIDADE, v.tipo)) erro("tipo", "Selecione o tipo.");
   const descricao = v.descricao.trim();
   if (descricao.length < 3 || descricao.length > 2000) erro("descricao", "Descreva a atividade (de 3 a 2000 caracteres).");
   const dataValida = z.iso.date().safeParse(v.data).success;
@@ -152,14 +154,15 @@ export function AtividadeForm({
 
   async function enviar(d: Saida) {
     setErroGeral(null);
-    if (!ehTipoAtividade(d.tipo)) return;
+    const tipo = entre(TIPOS_ATIVIDADE, d.tipo);
+    if (!tipo) return;
     const body: RegistrarAtividadeBody = {
       compromissoId: compromisso?.id ?? null,
       profissionalId: avulsa && coordenacao && d.profissionalId ? d.profissionalId : null,
       inicio: instanteCivil(d.data, d.inicio),
       fim: instanteCivil(d.data, d.fim),
       cursoId: d.cursoId || null,
-      tipo: d.tipo,
+      tipo,
       descricao: d.descricao.trim(),
       justificativaAvulso: avulsa ? d.justificativaAvulso : null,
     };
@@ -174,19 +177,13 @@ export function AtividadeForm({
 
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       {compromisso && (
         <dl className="grid grid-cols-1 gap-3 rounded-md bg-realce px-3 py-2.5 text-sm sm:grid-cols-2">
-          <div>
-            <dt className="text-xs text-suave">Horário agendado</dt>
-            <dd className="m-0">
-              {formatarData(compromisso.inicio)}, {formatarHora(compromisso.inicio)}–{formatarHora(compromisso.fim)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs text-suave">Profissional</dt>
-            <dd className="m-0">{compromisso.profissional}</dd>
-          </div>
+          <Dado rotulo="Horário agendado">
+            {formatarData(compromisso.inicio)}, {formatarIntervalo(compromisso.inicio, compromisso.fim)}
+          </Dado>
+          <Dado rotulo="Profissional">{compromisso.profissional}</Dado>
         </dl>
       )}
       <CamposAtividade register={register} errors={errors} />

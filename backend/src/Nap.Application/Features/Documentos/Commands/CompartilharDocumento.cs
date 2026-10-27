@@ -1,5 +1,6 @@
 using FluentValidation;
 using Nap.Application.Comum;
+using Nap.Application.Features.Alunos;
 
 namespace Nap.Application.Features.Documentos.Commands;
 
@@ -16,7 +17,7 @@ public class CompartilharDocumentoValidator : AbstractValidator<CompartilharDocu
 }
 
 public sealed class CompartilharDocumentoHandler(IValidator<CompartilharDocumentoCommand> validador,
-    IDocumentoRepository documentos, IUsuarioAtual usuario, IRelogio relogio, IAuditoria auditoria, IUnidadeDeTrabalho uow)
+    IDocumentoRepository documentos, IAlunoRepository alunos, IUsuarioAtual usuario, IRelogio relogio, IAuditoria auditoria, IUnidadeDeTrabalho uow)
 {
     public async Task Handle(CompartilharDocumentoCommand comando, CancellationToken ct = default)
     {
@@ -28,7 +29,8 @@ public sealed class CompartilharDocumentoHandler(IValidator<CompartilharDocument
         if (!usuario.EhEquipeNap()) throw new ForbiddenException();
         uow.ExigirVersao(d, comando.Versao);
 
-        d.Compartilhar(comando.Justificativa, usuario.Id, relogio.Agora);
+        var aluno = await alunos.ObterAsync(d.AlunoId, ct) ?? throw new NotFoundException("Documento");
+        d.Compartilhar(comando.Justificativa, usuario.Id, aluno.CursoAtualId, relogio.Agora);
         auditoria.Registrar("documento.compartilhar", "Documento", d.Id);
         await uow.SalvarAsync(ct);
     }

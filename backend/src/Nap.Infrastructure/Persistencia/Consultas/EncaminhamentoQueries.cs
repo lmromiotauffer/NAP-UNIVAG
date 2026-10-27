@@ -52,7 +52,8 @@ public sealed class EncaminhamentoQueries(NapDbContext db) : IEncaminhamentoQuer
         var limite = hoje.AddDays(-diasSemAcolhimento);
         var verMotivo = e.VerMotivo;
         var verObservacoes = e.VerObservacoes;
-        // Coordenador de curso só lê especialidade, destino e textos de evolução quando o destino é a própria coordenação.
+        // Coordenador de curso só lê especialidade, destino, resumo e textos de evolução quando o destino é a própria coordenação
+        // (mesma regra da linha do tempo do aluno).
         var textoSempre = e.SomenteCursoId is null;
         var linha = await NoEscopo(db, e)
             .Where(x => x.Id == id)
@@ -65,7 +66,8 @@ public sealed class EncaminhamentoQueries(NapDbContext db) : IEncaminhamentoQuer
                 x.Estado, x.DataEncaminhamento,
                 db.Users.Where(us => us.Id == x.SolicitanteId).Select(us => us.NomeCompleto).FirstOrDefault() ?? "",
                 x.Estado == EstadoEncaminhamento.Encaminhado && x.DataEncaminhamento < limite, x.AtualizadoEm,
-                x.SolicitanteId, verMotivo ? x.MotivoRestrito : null, x.ResumoCompartilhavel,
+                x.SolicitanteId, verMotivo ? x.MotivoRestrito : null,
+                textoSempre || x.Destino == DestinoEncaminhamento.CoordenacaoCurso ? x.ResumoCompartilhavel : null,
                 verObservacoes ? x.Observacoes : null,
                 x.DataAcolhimento, x.DataPrimeiroAtendimento, x.DataEncerramento, false, false,
                 x.Evolucoes.OrderBy(v => v.Em).ThenBy(v => v.Id)

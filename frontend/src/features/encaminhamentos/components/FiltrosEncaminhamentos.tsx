@@ -7,8 +7,9 @@ import { useSessao } from "../../../auth/useSessao";
 import { Button } from "../../../components/ui/Button";
 import { classeData, classeFiltro, Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
-import { DIA } from "../../../lib/format";
-import { paginaDaUrl, queryKeys } from "../../../lib/queryKeys";
+import { entre } from "../../../lib/entre";
+import { diaValido } from "../../../lib/format";
+import { comParametro, paginaDaUrl, queryKeys } from "../../../lib/queryKeys";
 import { BuscaAluno } from "../../alunos/components/BuscaAluno";
 import { alunoService } from "../../alunos/services/alunoService";
 import { useCursos } from "../../compartilhado/catalogos";
@@ -17,7 +18,6 @@ import type { FiltroEncaminhamentos } from "../services/encaminhamentoService";
 
 export const CHAVES_FILTRO = ["alunoId", "cursoId", "especialidade", "destino", "estado", "de", "ate", "semAcolhimentoNoPrazo"] as const;
 type ChaveFiltro = (typeof CHAVES_FILTRO)[number];
-const entre = <T extends string>(lista: readonly T[], v: string | undefined): T | undefined => lista.find((x) => x === v);
 
 /** A URL é a fonte da verdade: filtros sobrevivem a recarregar, voltar e compartilhar o link. */
 export function filtroDaUrl(params: URLSearchParams): FiltroEncaminhamentos {
@@ -28,8 +28,9 @@ export function filtroDaUrl(params: URLSearchParams): FiltroEncaminhamentos {
     especialidade: entre(ESPECIALIDADES, texto("especialidade")),
     destino: entre(DESTINOS, texto("destino")),
     estado: entre(ESTADOS, texto("estado")),
-    de: DIA.test(texto("de") ?? "") ? texto("de") : undefined,
-    ate: DIA.test(texto("ate") ?? "") ? texto("ate") : undefined,
+    // diaValido, não só a forma: "2026-13-99" num link antigo iria para a API e viraria 400.
+    de: diaValido(texto("de") ?? "") ? texto("de") : undefined,
+    ate: diaValido(texto("ate") ?? "") ? texto("ate") : undefined,
     semAcolhimentoNoPrazo: params.get("semAcolhimentoNoPrazo") === "1" || undefined,
   };
   f.pagina = paginaDaUrl(params);
@@ -51,16 +52,7 @@ export function FiltrosEncaminhamentos() {
   });
 
   function atualizar(chave: ChaveFiltro, valor: string) {
-    setParams(
-      (atual) => {
-        const proximo = new URLSearchParams(atual);
-        if (valor) proximo.set(chave, valor);
-        else proximo.delete(chave);
-        proximo.delete("pagina");
-        return proximo;
-      },
-      { replace: true },
-    );
+    setParams((atual) => comParametro(atual, chave, valor), { replace: true });
   }
 
   return (
@@ -120,10 +112,10 @@ export function FiltrosEncaminhamentos() {
         ))}
       </Select>
       <label htmlFor={`${id}-estado`} className="sr-only">
-        Situação
+        Estado
       </label>
       <Select id={`${id}-estado`} value={params.get("estado") ?? ""} onChange={(e) => atualizar("estado", e.target.value)} className={classeFiltro}>
-        <option value="">Situação: todas</option>
+        <option value="">Estado: todos</option>
         {ESTADOS.map((e) => (
           <option key={e} value={e}>
             {ROTULO_ESTADO[e]}

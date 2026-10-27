@@ -50,7 +50,7 @@ public class AtividadeCurso : Entidade
         justificativa = (justificativa ?? string.Empty).Trim();
         if (justificativa.Length is < 5 or > 500)
             throw new DomainException("A justificativa da correção é obrigatória e deve ter de 5 a 500 caracteres.");
-        descricao = ValidarDescricao(descricao);
+        descricao = Texto.Validar(descricao, 3, 2000, "A descrição da atividade");
         ValidarTermino(intervalo, agora);
 
         _correcoes.Add(CorrecaoAtividade.Criar(autorId, agora, justificativa, Intervalo, CursoId, Tipo, Descricao));
@@ -68,7 +68,7 @@ public class AtividadeCurso : Entidade
         Guid? cursoId, TipoAtividade tipo, string descricao, string? justificativaAvulso, Guid autorId, DateTimeOffset agora)
     {
         ArgumentNullException.ThrowIfNull(intervalo);
-        descricao = ValidarDescricao(descricao);
+        descricao = Texto.Validar(descricao, 3, 2000, "A descrição da atividade");
         ValidarTermino(intervalo, agora);
 
         return new AtividadeCurso
@@ -83,14 +83,6 @@ public class AtividadeCurso : Entidade
             CriadoPorId = autorId,
             CriadoEm = agora,
         };
-    }
-
-    private static string ValidarDescricao(string descricao)
-    {
-        descricao = (descricao ?? string.Empty).Trim();
-        if (descricao.Length is < 3 or > 2000)
-            throw new DomainException("A descrição da atividade deve ter de 3 a 2000 caracteres.");
-        return descricao;
     }
 
     private static void ValidarTermino(IntervaloHorario intervalo, DateTimeOffset agora)

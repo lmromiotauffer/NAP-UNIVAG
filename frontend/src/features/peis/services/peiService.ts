@@ -7,6 +7,7 @@ export type CriarPeiBody = Json<paths["/api/alunos/{alunoId}/peis"]["post"]["req
 export type ConteudoPeiBody = components["schemas"]["ConteudoPeiInput"];
 export type TrocarResponsavelBody = Json<paths["/api/peis/{id}/responsavel"]["post"]["requestBody"]>;
 type AcessoGerado = components["schemas"]["AcessoGeradoDto"];
+type VersaoAtualizada = components["schemas"]["VersaoAtualizadaDto"];
 
 const v = (id: string) => `/peis/versoes/${id}`;
 const semCorpo = (p: Promise<unknown>) => p.then(() => undefined);
@@ -17,7 +18,9 @@ export const peiService = {
   criar: (alunoId: string, body: CriarPeiBody, chave: string) =>
     api.post<{ id: string }>(`/alunos/${alunoId}/peis`, body, comChave(chave)).then((r) => r.data),
   novaVersao: (peiId: string, chave: string) => api.post<{ id: string }>(`/peis/${peiId}/versoes`, undefined, comChave(chave)).then((r) => r.data),
-  salvarConteudo: (id: string, body: ConteudoPeiBody, versao: string) => semCorpo(api.put(`${v(id)}/conteudo`, body, comVersao(versao))),
+  // Devolve a versão gravada (a próxima ação a usa no If-Match).
+  salvarConteudo: (id: string, body: ConteudoPeiBody, versao: string) =>
+    api.put<VersaoAtualizada>(`${v(id)}/conteudo`, body, comVersao(versao)).then((r) => r.data.versao),
   enviarRevisao: (id: string, versao: string) => semCorpo(api.post(`${v(id)}/enviar-revisao`, undefined, comVersao(versao))),
   aprovar: (id: string, versao: string) => semCorpo(api.post(`${v(id)}/aprovar`, undefined, comVersao(versao))),
   devolver: (id: string, justificativa: string, versao: string) => semCorpo(api.post(`${v(id)}/devolver`, { justificativa }, comVersao(versao))),
@@ -26,7 +29,7 @@ export const peiService = {
   arquivar: (id: string, motivo: string, versao: string) => semCorpo(api.post(`${v(id)}/arquivar`, { motivo }, comVersao(versao))),
   trocarResponsavel: (peiId: string, body: TrocarResponsavelBody) => semCorpo(api.post(`/peis/${peiId}/responsavel`, body)),
   ciencia: (id: string) => semCorpo(api.post(`${v(id)}/ciencia`)),
-  descartar: (id: string) => semCorpo(api.delete(v(id))),
+  descartar: (id: string, versao: string) => semCorpo(api.delete(v(id), comVersao(versao))),
   // Token e código só existem nesta resposta: quem chama não deve guardá-la em cache.
   gerarAcesso: (id: string) => api.post<AcessoGerado>(`${v(id)}/acesso-aluno`).then((r) => r.data),
   baixarPdf: (id: string) => baixarArquivo(`${v(id)}/pdf`),

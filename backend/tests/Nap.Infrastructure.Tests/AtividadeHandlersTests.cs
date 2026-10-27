@@ -27,7 +27,8 @@ public class AtividadeHandlersTests(SqlServerFixture fx)
         var relogio = new RelogioTeste(agora ?? Agora);
         return new RegistrarAtividadeHandler(new RegistrarAtividadeValidator(), new AtividadeRepository(db), new AgendaRepository(db),
             new CursoQueries(db), new UsuarioQueries(db), usuario, relogio, AuditoriaTeste.Criar(db, usuario, relogio),
-            new UnidadeDeTrabalho(db), new CacheNulo(), new ServicoFechamento(new FechamentoRepository(db), relogio));
+            new UnidadeDeTrabalho(db), new CacheNulo(), new ServicoFechamento(new FechamentoRepository(db), relogio),
+            new ServicoEscala(new EscalaRepository(db), new FeriadoRepository(db, relogio), relogio));
     }
 
     [Fact]
@@ -36,7 +37,7 @@ public class AtividadeHandlersTests(SqlServerFixture fx)
         var ct = TestContext.Current.CancellationToken;
         var prof = await fx.CriarProfissionalAsync();
         var compromisso = Compromisso.Criar(TipoCompromisso.AtividadeCurso, "Roda",
-            IntervaloHorario.Criar(Agora.AddHours(-2), Agora.AddHours(-1)), prof, null, null, prof, Agora.AddDays(-5));
+            IntervaloHorario.Criar(Agora.AddHours(-2), Agora.AddHours(-1)), prof, null, null, prof);
         await using (var db = fx.CriarContexto())
         {
             db.Compromissos.Add(compromisso);
@@ -126,7 +127,7 @@ public class AtividadeHandlersTests(SqlServerFixture fx)
             var usuario = new UsuarioAtualTeste(prof);
             var relogio = SqlServerFixture.Relogio();
             var criar = new CriarCompromissoHandler(new CriarCompromissoValidator(), new AgendaRepository(db), new AlunoRepository(db),
-                new UsuarioQueries(db), usuario, relogio, AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db), new CacheNulo(),
+                new UsuarioQueries(db), usuario, AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db), new CacheNulo(),
                 new ServicoEscala(new EscalaRepository(db), new FeriadoRepository(db, relogio), relogio),
                 new ServicoFechamento(new FechamentoRepository(db), relogio));
             await Assert.ThrowsAsync<ConflictException>(() => criar.Handle(new CriarCompromissoCommand(TipoCompromisso.ReuniaoEquipe,
@@ -140,7 +141,8 @@ public class AtividadeHandlersTests(SqlServerFixture fx)
         var corrigir = new CorrigirAtividadeHandler(new CorrigirAtividadeValidator(), new AtividadeRepository(dbC),
             new AtividadeQueries(dbC, relogioC), new AgendaRepository(dbC), new CursoQueries(dbC), usuarioC, relogioC,
             AuditoriaTeste.Criar(dbC, usuarioC, relogioC), new UnidadeDeTrabalho(dbC), new CacheNulo(),
-            new ServicoFechamento(new FechamentoRepository(dbC), relogioC));
+            new ServicoFechamento(new FechamentoRepository(dbC), relogioC),
+            new ServicoEscala(new EscalaRepository(dbC), new FeriadoRepository(dbC, relogioC), relogioC));
         var versao = (await new AtividadeQueries(dbC, relogioC).ObterAsync(id, null, ct))!.Versao;
         var dto = await corrigir.Handle(new CorrigirAtividadeCommand(id, versao, inicio, inicio.AddHours(1), null,
             TipoAtividade.RodaConversa, "Descrição corrigida", "Ajuste de descrição"), ct);
@@ -151,7 +153,7 @@ public class AtividadeHandlersTests(SqlServerFixture fx)
 
     private async Task<Compromisso> AgendarAsync(Guid prof, TipoCompromisso tipo, DateTimeOffset inicio, DateTimeOffset fim)
     {
-        var c = Compromisso.Criar(tipo, "Compromisso", IntervaloHorario.Criar(inicio, fim), prof, null, null, prof, Agora);
+        var c = Compromisso.Criar(tipo, "Compromisso", IntervaloHorario.Criar(inicio, fim), prof, null, null, prof);
         await using var db = fx.CriarContexto();
         db.Compromissos.Add(c);
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -185,6 +187,23 @@ public class AtividadeHandlersTests(SqlServerFixture fx)
         await AgendarAsync(prof, TipoCompromisso.ReuniaoEquipe, Dia.AddHours(10), Dia.AddHours(11));
 
         await Assert.ThrowsAsync<ConflictException>(() => RegistrarDeCompromissoAsync(prof, c, Dia.AddHours(10.5)));
+    }
+
+    [Fact]
+    public async Task Avulsa_e_ajuste_de_inicio_fora_da_escala_sao_rejeitados()
+    {
+        var prof = await fx.CriarProfissionalAsync();
+        var c = await AgendarAsync(prof, TipoCompromisso.AtividadeCurso, Dia.AddHours(9), Dia.AddHours(10));
+        await using var db = fx.CriarContexto();
+        var noturna = Dia.AddHours(22); // fora da escala padrão (07:00–17:00)
+
+        var ex = await Assert.ThrowsAsync<DomainException>(() => Registrador(db, new UsuarioAtualTeste(prof), Dia.AddDays(1)).Handle(
+            new RegistrarAtividadeCommand(null, null, noturna, noturna.AddHours(1), null, TipoAtividade.RodaConversa, "Roda noturna",
+                "Atividade sem agendamento"), TestContext.Current.CancellationToken));
+        Assert.Equal("Fora da escala do profissional neste dia.", ex.Message);
+        await Assert.ThrowsAsync<DomainException>(() => Registrador(db, new UsuarioAtualTeste(prof), Dia.AddDays(1)).Handle(
+            new RegistrarAtividadeCommand(c.Id, null, noturna, noturna.AddHours(1), null, TipoAtividade.RodaConversa, "Roda", null),
+            TestContext.Current.CancellationToken));
     }
 
     private (RegistrarAtendimentoHandler Registrar, CorrigirAtendimentoHandler Corrigir) HandlersDeAtendimento(NapDbContext db, Guid prof)

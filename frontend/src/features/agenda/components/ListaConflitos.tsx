@@ -1,4 +1,4 @@
-import { formatarData, formatarHora } from "../../../lib/format";
+import { formatarData, formatarIntervalo } from "../../../lib/format";
 import type { ConflitoAgenda } from "../../../lib/types";
 
 /** Itens que ocupam o horário de um bloqueio recusado (409 com `conflitos`). */
@@ -8,7 +8,7 @@ export function ListaConflitos({ conflitos }: { conflitos: ConflitoAgenda[] }) {
     <ul aria-label="Itens em conflito" className="mt-2 list-disc pl-5">
       {conflitos.map((c) => (
         <li key={c.id}>
-          {c.tipo} · {formatarData(c.inicio)} · {formatarHora(c.inicio)}–{formatarHora(c.fim)}
+          {c.tipo} · {formatarData(c.inicio)} · {formatarIntervalo(c.inicio, c.fim)}
           {c.aluno ? ` · ${c.aluno}` : ""}
           {c.profissional ? ` · ${c.profissional}` : ""}
         </li>

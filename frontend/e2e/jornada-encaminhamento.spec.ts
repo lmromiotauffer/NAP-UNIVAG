@@ -1,7 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { entrar, sair, tokenDe } from "./apoio";
-
-const diaCuiaba = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Cuiaba" }).format(d);
+import { hojeCivil, entrar, sair, tokenDe } from "./apoio";
 
 /** O selo só atualiza a cada 60 s: recarrega até o processador da outbox ter gerado o aviso. Qualquer total serve: o selo acumula não lidas deixadas pelas jornadas anteriores (em série) para os mesmos usuários de demonstração. */
 async function aguardarSeloDeNotificacao(page: Page) {
@@ -29,7 +27,7 @@ test("profissional encaminha ao SIP, o SIP acolhe e a coordenação de curso nã
       matricula: `E2E-ENC-${sufixo}`,
       cursoId: cursos.find((c) => c.nome === "Direito")?.id,
       semestre: 2,
-      inicioAcompanhamento: diaCuiaba(new Date()),
+      inicioAcompanhamento: hojeCivil(new Date()),
       profissionalResponsavelId: anaId,
     },
   });
@@ -62,7 +60,7 @@ test("profissional encaminha ao SIP, o SIP acolhe e a coordenação de curso nã
   await expect(page.getByText(motivo)).toBeVisible(); // premissa: o SIP vê o motivo
   await page.getByRole("button", { name: "Registrar acolhimento" }).click();
   const retorno = page.getByRole("dialog", { name: "Registrar acolhimento" });
-  await expect(retorno.getByLabel("Data do acolhimento")).toHaveValue(diaCuiaba(new Date()));
+  await expect(retorno.getByLabel("Data do acolhimento")).toHaveValue(hojeCivil(new Date()));
   await retorno.getByRole("button", { name: "Registrar" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Retorno registrado." })).toBeVisible();
   await sair(page);

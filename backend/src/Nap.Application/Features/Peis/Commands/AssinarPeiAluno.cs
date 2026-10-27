@@ -40,7 +40,7 @@ public sealed class AssinarPeiAlunoHandler(IValidator<AssinarPeiAlunoCommand> va
 
         var hash = acesso.HashConteudo;
         var evidencia = await assinaturas.AssinarAsync(versao.Id, PapelAssinatura.Aluno, aluno.NomeCompleto, hash, agora, ct);
-        versao.RegistrarAssinatura(PapelAssinatura.Aluno, null, aluno.NomeCompleto, hash, evidencia.Evidencia, agora);
+        versao.RegistrarAssinatura(PapelAssinatura.Aluno, null, aluno.NomeCompleto, hash, evidencia.Evidencia, agora, evidencia.Metodo);
         acesso.MarcarUsado(agora);
         auditoria.Registrar("pei.assinar", "AcessoAssinaturaPei", acesso.Id);
         for (var repeticao = 0; ; repeticao++)

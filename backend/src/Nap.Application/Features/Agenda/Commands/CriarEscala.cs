@@ -1,5 +1,6 @@
 using FluentValidation;
 using Nap.Application.Comum;
+using Nap.Application.Features.Producao;
 using Nap.Application.Features.Usuarios;
 using Nap.Domain.Agenda;
 
@@ -35,7 +36,7 @@ public class CriarEscalaValidator : AbstractValidator<CriarEscalaCommand>
 }
 
 public sealed class CriarEscalaHandler(IValidator<CriarEscalaCommand> validador, IEscalaRepository escalas, IAgendaRepository agenda,
-    IUsuarioQueries usuarios, IUsuarioAtual usuario, IAuditoria auditoria, IUnidadeDeTrabalho uow)
+    IUsuarioQueries usuarios, IUsuarioAtual usuario, IAuditoria auditoria, IUnidadeDeTrabalho uow, ServicoFechamento fechamento)
 {
     public const string MensagemSobreposicao = "A vigência se sobrepõe a outra escala deste profissional.";
 
@@ -50,6 +51,7 @@ public sealed class CriarEscalaHandler(IValidator<CriarEscalaCommand> validador,
             comando.Faixas.Select(f => new FaixaEscala(f.Dia, f.Inicio, f.Fim, f.SemAtendimento)).ToList());
         return await uow.EmTransacaoAsync(async tct =>
         {
+            await fechamento.ExigirPeriodoAbertoAsync(escala.ProfissionalId, escala.VigenciaInicio, escala.VigenciaFim, tct);
             await ExigirSemSobreposicaoAsync(escalas, agenda, escala, tct);
             escalas.Adicionar(escala);
             auditoria.Registrar("escala.criar", "EscalaProfissional", escala.Id);

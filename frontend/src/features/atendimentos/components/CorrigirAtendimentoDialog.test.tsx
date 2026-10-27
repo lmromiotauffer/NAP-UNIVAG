@@ -16,6 +16,7 @@ const atendimento: AtendimentoDetalhe = {
   compromissoId: null,
   inicio: "2026-09-29T08:00:00-04:00",
   fim: "2026-09-29T09:00:00-04:00",
+  duracaoMinutos: 60,
   alunoId: "a1",
   aluno: "Maria Clara Souza",
   profissionalId: "p1",

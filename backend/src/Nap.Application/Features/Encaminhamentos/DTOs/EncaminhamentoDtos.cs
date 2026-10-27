@@ -15,6 +15,6 @@ public record EvolucaoEncaminhamentoDto(DateTimeOffset Em, string Autor, AcaoRet
 public record EncaminhamentoDetalheDto(Guid Id, Guid AlunoId, string Aluno, string Matricula, string Curso,
     Especialidade? Especialidade, DestinoEncaminhamento? Destino, EstadoEncaminhamento Estado, DateOnly Data, string Solicitante,
     bool SemAcolhimentoNoPrazo, DateTimeOffset AtualizadoEm, Guid SolicitanteId, string? MotivoRestrito,
-    string ResumoCompartilhavel, string? Observacoes, DateOnly? DataAcolhimento, DateOnly? DataPrimeiroAtendimento,
+    string? ResumoCompartilhavel, string? Observacoes, DateOnly? DataAcolhimento, DateOnly? DataPrimeiroAtendimento,
     DateOnly? DataEncerramento, bool PodeRegistrarRetorno, bool PodeCancelar, IReadOnlyList<EvolucaoEncaminhamentoDto> Evolucoes,
     string Versao);

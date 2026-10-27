@@ -11,7 +11,8 @@ export function senha(): string {
 export async function entrar(page: Page, email: string, senhaUsada: string = senha()) {
   await page.goto("/entrar");
   await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Senha").fill(senhaUsada);
+  // exact: o botão "Mostrar senha" também casaria com o rótulo parcial.
+  await page.getByLabel("Senha", { exact: true }).fill(senhaUsada);
   await page.getByRole("button", { name: "Entrar" }).click();
   await expect(page.getByRole("navigation", { name: "Principal" }).or(page.getByRole("heading", { level: 1, name: "Defina uma nova senha" }))).toBeVisible();
 }
@@ -27,3 +28,6 @@ export async function tokenDe(request: APIRequestContext, email: string): Promis
   expect(resposta.ok()).toBe(true);
   return ((await resposta.json()) as { accessToken: string }).accessToken;
 }
+
+// Os mesmos helpers de dia civil (Cuiabá) da aplicação, em vez de uma cópia aqui.
+export { hojeCivil, somarDias } from "../src/lib/format";

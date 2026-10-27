@@ -17,10 +17,10 @@ public class AgendaSemanaTests(SqlServerFixture fx)
         var prof = await fx.CriarProfissionalAsync(nome: "Profissional remarcação");
         var agora = Local(1, 8);
         var original = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião", IntervaloHorario.Criar(Local(3, 9), Local(3, 10)),
-            prof, null, "Pauta: PEI do semestre", prof, agora);
-        var novo = original.Remarcar(IntervaloHorario.Criar(Local(4, 9), Local(4, 10)), prof, agora);
+            prof, null, "Pauta: PEI do semestre", prof);
+        var novo = original.Remarcar(IntervaloHorario.Criar(Local(4, 9), Local(4, 10)), prof);
         var simples = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Sem descrição", IntervaloHorario.Criar(Local(5, 9), Local(5, 10)),
-            prof, null, null, prof, agora);
+            prof, null, null, prof);
         await using (var db = fx.CriarContexto())
         {
             db.AddRange(original, novo, simples);
@@ -51,12 +51,12 @@ public class AgendaSemanaTests(SqlServerFixture fx)
         var grupo = Guid.NewGuid();
         // O colega remarca a própria instância: o autor da remarcação não vira criador do grupo.
         var doCriador = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião do grupo", IntervaloHorario.Criar(Local(18, 9), Local(18, 10)),
-            criador, null, null, criador, agora, grupo);
+            criador, null, null, criador, grupo);
         var doColega = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião do grupo", IntervaloHorario.Criar(Local(18, 9), Local(18, 10)),
-            colega, null, null, criador, agora, grupo);
-        var remarcada = doColega.Remarcar(IntervaloHorario.Criar(Local(19, 9), Local(19, 10)), colega, agora);
+            colega, null, null, criador, grupo);
+        var remarcada = doColega.Remarcar(IntervaloHorario.Criar(Local(19, 9), Local(19, 10)), colega);
         var individual = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Individual", IntervaloHorario.Criar(Local(20, 9), Local(20, 10)),
-            criador, null, null, criador, agora);
+            criador, null, null, criador);
         await using (var db = fx.CriarContexto())
         {
             db.AddRange(doCriador, doColega, remarcada, individual);

@@ -76,7 +76,7 @@ export function AjusteForm({ profissionalPadrao, aoConcluir, aoCancelar }: { pro
 
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field rotulo="Profissional" erro={errors.profissionalId?.message} obrigatorio>
           <Select {...register("profissionalId")}>

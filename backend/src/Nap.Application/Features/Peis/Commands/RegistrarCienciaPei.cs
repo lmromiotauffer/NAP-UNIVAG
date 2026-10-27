@@ -1,5 +1,6 @@
 using FluentValidation;
 using Nap.Application.Comum;
+using Nap.Application.Features.Alunos;
 
 namespace Nap.Application.Features.Peis.Commands;
 
@@ -11,7 +12,7 @@ public class RegistrarCienciaPeiValidator : AbstractValidator<RegistrarCienciaPe
 }
 
 public sealed class RegistrarCienciaPeiHandler(IValidator<RegistrarCienciaPeiCommand> validador, IPeiRepository peis,
-    IUsuarioAtual usuario, IRelogio relogio, IAuditoria auditoria, IUnidadeDeTrabalho uow, ICacheConsultas cache)
+    IAlunoRepository alunos, IUsuarioAtual usuario, IRelogio relogio, IAuditoria auditoria, IUnidadeDeTrabalho uow, ICacheConsultas cache)
 {
     public const string MensagemCienciaDuplicada = "Ciência já registrada para esta versão.";
 
@@ -19,8 +20,8 @@ public sealed class RegistrarCienciaPeiHandler(IValidator<RegistrarCienciaPeiCom
     {
         AutorizacaoPei.ExigirAcesso(usuario);
         await validador.ValidarAsync(comando, ct);
-        var (_, versao) = await AutorizacaoPei.ObterVersaoAsync(peis, usuario, comando.VersaoId, ct);
-        if (!AutorizacaoPei.PodeRegistrarCiencia(usuario, versao)) throw new ForbiddenException();
+        var (_, versao, cursoAtual) = await AutorizacaoPei.ObterVersaoAsync(peis, alunos, usuario, comando.VersaoId, ct);
+        if (!AutorizacaoPei.PodeRegistrarCiencia(usuario, versao, cursoAtual)) throw new ForbiddenException();
 
         // Idempotente: a ciência repetida não grava nem audita de novo.
         var antes = versao.Ciencias.Count;

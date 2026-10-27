@@ -5,16 +5,20 @@ import type { ConflitoAgenda, Sessao } from "./types";
 export const api = axios.create({
   baseURL: "/api",
   withCredentials: true,
+  timeout: 30_000,
 });
 
 // O token de acesso vive só em memória: nunca em localStorage/sessionStorage.
 let token: string | null = null;
+// Dono do token: um refresh que traga outro usuário (cookie trocado em outra aba) não pode reenviar pedidos do anterior.
+let usuarioDoToken: string | null = null;
 // Geração da sessão: muda a cada troca explícita de identidade (login, logout, expiração).
 // Um refresh iniciado numa geração anterior é obsoleto e tem o resultado descartado.
 let geracao = 0;
 /** Troca explícita de identidade. O refresh usa a atribuição interna e não muda a geração. */
-export const definirToken = (t: string | null): void => {
+export const definirToken = (t: string | null, usuarioId: string | null = null): void => {
   token = t;
+  usuarioDoToken = usuarioId;
   geracao++;
 };
 
@@ -37,8 +41,6 @@ export function aoSessaoRenovada(cb: (s: Sessao) => void): () => void {
 
 let renovacaoEmVoo: Promise<Sessao | null> | null = null;
 let geracaoEmVoo = -1;
-// Refresh cuja falha já foi notificada: N 401 simultâneos notificam uma única vez.
-let falhaNotificada: Promise<Sessao | null> | null = null;
 
 /**
  * Uma única promessa compartilhada enquanto o refresh está em voo. Resolve `null` só quando a API recusa o cookie (4xx);
@@ -50,11 +52,14 @@ export function renovarSessao(): Promise<Sessao | null> {
   const inicio = geracao;
   geracaoEmVoo = inicio;
   const promessa: Promise<Sessao | null> = api
-    .post<Sessao>("/auth/refresh", undefined, { headers: { "X-Requested-With": "nap-spa" } })
+    // Sem timeout: a API gira o token mesmo se o cliente desistir; abortar perderia o cookie novo e o próximo refresh
+    // (com o antigo, fora da tolerância de 5 s) seria tratado como reuso, revogando a sessão.
+    .post<Sessao>("/auth/refresh", undefined, { headers: { "X-Requested-With": "nap-spa" }, timeout: 0 })
     .then((r) => {
       // Login ou logout durante o refresh: descarta (sem token, sem aviso), senão reautentica ou troca o usuário.
       if (geracao !== inicio) return null;
       token = r.data.accessToken;
+      usuarioDoToken = r.data.usuario.id;
       for (const ouvinte of [...ouvintesRenovacao]) ouvinte(r.data);
       return r.data;
     })
@@ -69,10 +74,12 @@ export function renovarSessao(): Promise<Sessao | null> {
   return promessa;
 }
 
-type ConfigRenovavel = InternalAxiosRequestConfig & { _renovada?: boolean };
+type ConfigRenovavel = InternalAxiosRequestConfig & { _renovada?: boolean; _geracao?: number; _usuario?: string | null };
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use((config: ConfigRenovavel) => {
   if (token) config.headers.set("Authorization", `Bearer ${token}`);
+  config._geracao = geracao;
+  config._usuario = usuarioDoToken;
   return config;
 });
 
@@ -82,7 +89,7 @@ api.interceptors.response.use(undefined, async (erro: unknown) => {
   // Só login, refresh e logout ficam fora: /auth/senha e /auth/eu são autenticados e renovam como o resto.
   if (/^\/auth\/(login|refresh|logout)$/.test(config.url ?? "") || config._renovada) throw erro;
 
-  const geracaoDoPedido = geracao;
+  const geracaoDoPedido = config._geracao ?? geracao;
   const renovacao = renovarSessao();
   let sessao: Sessao | null;
   try {
@@ -95,13 +102,13 @@ api.interceptors.response.use(undefined, async (erro: unknown) => {
   if (!sessao) {
     // Identidade trocada enquanto esperava (login/logout): não derruba a sessão nova.
     if (geracao !== geracaoDoPedido) throw erro;
+    // definirToken muda a geração: os demais 401 que esperavam este refresh saem na checagem acima, então o aviso sai uma vez só.
     definirToken(null);
-    if (falhaNotificada !== renovacao) {
-      falhaNotificada = renovacao;
-      for (const ouvinte of [...ouvintesExpiracao]) ouvinte();
-    }
+    for (const ouvinte of [...ouvintesExpiracao]) ouvinte();
     throw erro;
   }
+  // Enviado como um usuário, renovado como outro: reenviar agiria em nome de quem não pediu.
+  if (config._usuario && sessao.usuario.id !== config._usuario) throw erro;
   config._renovada = true;
   config.headers.set("Authorization", `Bearer ${sessao.accessToken}`);
   return api(config);

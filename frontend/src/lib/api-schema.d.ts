@@ -1378,6 +1378,15 @@ export interface paths {
                         "application/problem+json": components["schemas"]["ProblemDetails"];
                     };
                 };
+                /** @description Muitas tentativas */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
             };
         };
         delete?: never;
@@ -1444,6 +1453,15 @@ export interface paths {
                 };
                 /** @description Regra de negócio violada */
                 422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Muitas tentativas */
+                429: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2661,6 +2679,7 @@ export interface paths {
                     caixa?: components["schemas"]["CaixaMensagens"];
                     busca?: string;
                     alunoId?: string;
+                    encaminhamentoId?: string;
                     pagina?: number;
                     tamanho?: number;
                 };
@@ -2924,6 +2943,7 @@ export interface paths {
                 query?: {
                     alunoId?: string;
                     encaminhamentoId?: string;
+                    cursoId?: string;
                 };
                 header?: never;
                 path?: never;
@@ -6229,7 +6249,9 @@ export interface paths {
         delete: {
             parameters: {
                 query?: never;
-                header?: never;
+                header: {
+                    "If-Match": string;
+                };
                 path: {
                     id: string;
                 };
@@ -6291,6 +6313,15 @@ export interface paths {
                 };
                 /** @description Regra de negócio violada */
                 422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/problem+json": components["schemas"]["ProblemDetails"];
+                    };
+                };
+                /** @description Versão do registro ausente */
+                428: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -6423,12 +6454,14 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description No Content */
-                204: {
+                /** @description OK */
+                200: {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["VersaoAtualizadaDto"];
+                    };
                 };
                 /** @description Requisição inválida */
                 400: {
@@ -8608,15 +8641,16 @@ export interface components {
             id: string;
             nome: string;
             matricula: string;
+            matriculaAtiva: null | boolean;
             /** Format: uuid */
-            cursoId: string;
+            cursoId: null | string;
             curso: string;
             /** Format: int32 */
-            semestre: number;
+            semestre: null | number;
             /** Format: uuid */
-            profissionalId: string;
+            profissionalId: null | string;
             profissional: string;
-            situacao: components["schemas"]["SituacaoAluno"];
+            situacao: null | components["schemas"]["SituacaoAluno"];
             /** Format: date */
             inicioAcompanhamento: string;
             necessidadesEducacionais: null | string;
@@ -8629,15 +8663,16 @@ export interface components {
             id: string;
             nome: string;
             matricula: string;
+            matriculaAtiva: null | boolean;
             /** Format: uuid */
-            cursoId: string;
+            cursoId: null | string;
             curso: string;
             /** Format: int32 */
-            semestre: number;
+            semestre: null | number;
             /** Format: uuid */
-            profissionalId: string;
+            profissionalId: null | string;
             profissional: string;
-            situacao: components["schemas"]["SituacaoAluno"];
+            situacao: null | components["schemas"]["SituacaoAluno"];
             /** Format: int32 */
             totalAtendimentos: null | number;
             /** Format: int32 */
@@ -8687,6 +8722,8 @@ export interface components {
             inicio: string;
             /** Format: date-time */
             fim: string;
+            /** Format: int32 */
+            duracaoMinutos: number;
             /** Format: uuid */
             alunoId: string;
             aluno: string;
@@ -8810,6 +8847,7 @@ export interface components {
             observacoesAcademicas: null | string;
             /** Format: uuid */
             profissionalResponsavelId: string;
+            matriculaAtiva: boolean;
         };
         AtualizarCompromissoRequest: {
             titulo: string;
@@ -9220,7 +9258,7 @@ export interface components {
             /** Format: uuid */
             solicitanteId: string;
             motivoRestrito: null | string;
-            resumoCompartilhavel: string;
+            resumoCompartilhavel: null | string;
             observacoes: null | string;
             /** Format: date */
             dataAcolhimento: null | string;
@@ -9914,6 +9952,9 @@ export interface components {
             percentualOcorrencias: null | number;
             /** Format: double */
             percentualMinutos: null | number;
+        };
+        VersaoAtualizadaDto: {
+            versao: string;
         };
         VersaoParaAssinaturaDto: {
             aluno: string;

@@ -244,6 +244,17 @@ public class NotificacoesTests
     }
 
     [Fact]
+    public async Task Mensagem_lida_antes_da_outbox_nao_notifica()
+    {
+        var destinatario = Usuario(Perfis.CoordenadorNap);
+        var evento = Enviada(Usuario(Perfis.ProfissionalNap), destinatario, "Assunto");
+        _mensagens.Mensagens.Single(m => m.Id == evento.MensagemId).MarcarLida(destinatario, Agora.AddSeconds(2));
+
+        Assert.Equal(0, await Handler().Handle(evento, TestContext.Current.CancellationToken));
+        Assert.Empty(_repo.Notificacoes);
+    }
+
+    [Fact]
     public async Task Mensagem_de_remetente_sem_cadastro_mostra_so_o_tipo()
     {
         var destinatario = Usuario(Perfis.CoordenadorNap);

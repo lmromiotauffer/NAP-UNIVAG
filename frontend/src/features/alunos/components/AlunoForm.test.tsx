@@ -100,6 +100,7 @@ describe("AlunoForm", () => {
       id: "33333333-3333-3333-3333-333333333333",
       nome: "Maria Clara Souza",
       matricula: "2026.0001",
+      matriculaAtiva: true,
       cursoId: "11111111-1111-1111-1111-111111111111",
       curso: "Direito",
       semestre: 3,
@@ -128,6 +129,7 @@ describe("AlunoForm", () => {
       id: "33333333-3333-3333-3333-333333333333",
       nome: "Maria Clara Souza",
       matricula: "2026.0001",
+      matriculaAtiva: true,
       cursoId: "11111111-1111-1111-1111-111111111111",
       curso: "Direito",
       semestre: 3,
@@ -147,9 +149,11 @@ describe("AlunoForm", () => {
       </QueryClientProvider>,
     );
     await screen.findByRole("option", { name: "Ana Souza" });
-    await userEvent.setup().click(screen.getByRole("button", { name: "Salvar" }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("checkbox", { name: "Matrícula ativa" }));
+    await user.click(screen.getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(aoConcluir).toHaveBeenCalled());
-    expect(alunoService.atualizar).toHaveBeenCalledWith(aluno.id, expect.any(Object), aluno.versao);
+    expect(alunoService.atualizar).toHaveBeenCalledWith(aluno.id, expect.objectContaining({ matriculaAtiva: false }), aluno.versao);
   });
 
   it("apos_409_a_retentativa_continua_enviando_a_versao_de_quando_o_formulario_abriu", async () => {
@@ -159,6 +163,7 @@ describe("AlunoForm", () => {
       id: "33333333-3333-3333-3333-333333333333",
       nome: "Maria Clara Souza",
       matricula: "2026.0001",
+      matriculaAtiva: true,
       cursoId: "11111111-1111-1111-1111-111111111111",
       curso: "Direito",
       semestre: 3,

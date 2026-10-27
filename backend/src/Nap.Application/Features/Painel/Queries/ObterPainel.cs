@@ -28,8 +28,8 @@ public sealed class ObterPainelHandler(IValidator<ObterPainelQuery> validador, I
 
         var hoje = relogio.Hoje;
         var inicio = query.Semana ?? ServicoFechamento.SegundaDe(hoje);
-        var fim = inicio.AddDays(4);
-        // Parcial só de segunda a sexta: no fim de semana a semana útil já terminou.
+        // Segunda a domingo, a mesma semana da produção e do fechamento.
+        var fim = inicio.AddDays(6);
         var periodo = new PeriodoDto(inicio, fim, hoje >= inicio && hoje <= fim);
 
         var perfil = usuario.Perfil;
@@ -84,6 +84,8 @@ public sealed class ObterPainelHandler(IValidator<ObterPainelQuery> validador, I
             };
 
         var escopo = EscopoEncaminhamentos.Para(usuario);
+        // Filtro de curso: o curso gravado na criação (o mesmo recorte da coordenação de curso), não o atual do aluno como nos PEIs.
+        if (f.CursoId is { } cursoFiltro) escopo = escopo with { Todos = false, SomenteCursoId = cursoFiltro };
         var listaAlertas = (await consultas.ObterAlertasAsync(hoje, f.ProfissionalId, f.CursoId, opcoes, ct))
             .Concat(await consultas.ObterAlertasEncaminhamentoAsync(escopo, f.ProfissionalId, perfil != Perfis.ProfissionalNap, hoje, opcoes, ct))
             .Concat(await consultas.ObterAlertasPeiAsync(f.ProfissionalId, f.CursoId, perfil != Perfis.ProfissionalNap, hoje, opcoes, ct))

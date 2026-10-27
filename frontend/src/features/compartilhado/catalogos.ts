@@ -1,4 +1,3 @@
-// ponytail: catálogos usados por várias features; pasta única até existir feature dona (Administração, Fase 3).
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { queryKeys } from "../../lib/queryKeys";

@@ -22,7 +22,7 @@ public sealed class AprovarRevisaoPeiHandler(IValidator<AprovarRevisaoPeiCommand
         if (!AutorizacaoPei.PodeRevisarEPublicar(usuario)) throw new ForbiddenException();
         uow.ExigirVersao(versao, comando.Versao);
 
-        versao.AprovarRevisao(usuario.Id, CalculadoraHashPei.Calcular(versao.Conteudo), relogio.Agora);
+        versao.AprovarRevisao(usuario.Id, relogio.Agora);
         auditoria.Registrar("pei.revisao.aprovar", "VersaoPei", versao.Id);
         await uow.SalvarAsync(ct);
         await cache.InvalidarAreaAsync(ct);

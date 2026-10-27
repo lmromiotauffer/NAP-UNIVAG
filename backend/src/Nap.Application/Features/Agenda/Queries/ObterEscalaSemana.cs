@@ -32,7 +32,7 @@ public sealed class ObterEscalaSemanaHandler(IValidator<ObterEscalaSemanaQuery> 
         {
             var data = query.Semana.AddDays(i);
             // Vigência trocada no meio da semana muda a grade só a partir da data dela.
-            var faixa = ServicoEscala.FaixaDe(doProfissional.FirstOrDefault(e => e.Vigente(data)), data);
+            var faixa = ServicoEscala.FaixaDe(EscalaProfissional.VigenteEm(doProfissional, data), data);
             return new DiaEscalaDto(data, faixa?.Inicio, faixa?.Fim, faixa?.SemAtendimento ?? false,
                 daSemana.FirstOrDefault(f => f.Data == data)?.Descricao);
         }).ToList();

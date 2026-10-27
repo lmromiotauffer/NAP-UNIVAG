@@ -6,9 +6,9 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Paginacao } from "../../../components/ui/Paginacao";
 import { Skeleton } from "../../../components/ui/Skeleton";
-import { Table, th, td, soMedio, trClicavel } from "../../../components/ui/Table";
+import { Table, classeAbrirLinha, th, td, soLargo, soMedio, trClicavel } from "../../../components/ui/Table";
 import { cn } from "../../../lib/cn";
-import { formatarData, formatarDuracao, formatarHora } from "../../../lib/format";
+import { formatarData, formatarDuracao, formatarIntervalo } from "../../../lib/format";
 import { useListaAtividades } from "../hooks/useAtividades";
 import type { FiltroAtividades } from "../services/atividadeService";
 import { ROTULO_TIPO_ATIVIDADE, ROTULO_TURNO } from "../rotulos";
@@ -30,7 +30,7 @@ export function ListaAtividades({
   aoAbrir: (id: string) => void;
 }) {
   const lista = useListaAtividades(filtro);
-  const colunas = [soMedio, soMedio, "", "hidden lg:table-cell", "hidden lg:table-cell", ""];
+  const colunas = [soMedio, soMedio, "", soLargo, soLargo, ""];
 
   if (lista.isError && !lista.data)
     return (
@@ -70,8 +70,8 @@ export function ListaAtividades({
               <span className="sm:hidden">Atividade</span>
               <span className="max-sm:hidden">Curso · tipo</span>
             </th>
-            <th scope="col" className={cn(th, "hidden lg:table-cell")}>Duração</th>
-            <th scope="col" className={cn(th, "hidden lg:table-cell")}>Profissional</th>
+            <th scope="col" className={cn(th, soLargo)}>Duração</th>
+            <th scope="col" className={cn(th, soLargo)}>Profissional</th>
             <th scope="col" className={th}>
               <span className="sr-only">Ações</span>
             </th>
@@ -83,7 +83,7 @@ export function ListaAtividades({
                 <tr key={a.id} className={trClicavel}>
                   <td className={cn(td, soMedio, "text-rotulo whitespace-nowrap text-suave tabular-nums")}>{formatarData(a.inicio)}</td>
                   <td className={cn(td, soMedio, "text-rotulo whitespace-nowrap tabular-nums")}>
-                    {ROTULO_TURNO[a.turno]} · {formatarHora(a.inicio)}–{formatarHora(a.fim)}
+                    {ROTULO_TURNO[a.turno]} · {formatarIntervalo(a.inicio, a.fim)}
                   </td>
                   <td className={td}>
                     {/* A partir de `sm` curso e tipo dividem a linha; no celular o tipo desce para a linha dos detalhes. */}
@@ -96,17 +96,17 @@ export function ListaAtividades({
                     </div>
                     <div className="text-rotulo text-suave tabular-nums sm:hidden">
                       {ROTULO_TIPO_ATIVIDADE[a.tipo]}
-                      {a.avulsa && " · avulsa"} · {formatarData(a.inicio)} · {ROTULO_TURNO[a.turno]} · {formatarHora(a.inicio)}–{formatarHora(a.fim)} · {a.profissional}
+                      {a.avulsa && " · avulsa"} · {formatarData(a.inicio)} · {ROTULO_TURNO[a.turno]} · {formatarIntervalo(a.inicio, a.fim)} · {a.profissional}
                     </div>
                   </td>
-                  <td className={cn(td, "hidden text-rotulo whitespace-nowrap lg:table-cell")}>{formatarDuracao(a.duracaoMinutos)}</td>
+                  <td className={cn(td, "hidden text-rotulo whitespace-nowrap tabular-nums lg:table-cell")}>{formatarDuracao(a.duracaoMinutos)}</td>
                   <td className={cn(td, "hidden text-rotulo lg:table-cell")}>{a.profissional}</td>
                   <td className={cn(td, "text-right max-sm:pl-0")}>
                     <button
                       type="button"
                       onClick={() => aoAbrir(a.id)}
                       aria-label={`Abrir atividade de ${formatarData(a.inicio)}: ${ROTULO_TIPO_ATIVIDADE[a.tipo]}, ${a.curso ?? "institucional"}`}
-                      className="inline-flex items-center gap-1 rounded-sm text-xs font-semibold whitespace-nowrap text-primaria after:absolute after:inset-0 after:content-['']"
+                      className={classeAbrirLinha}
                     >
                       <span className="hidden lg:inline">Abrir</span>
                       <ChevronRight aria-hidden="true" className="size-3.5" />
@@ -133,7 +133,7 @@ export function ListaAtividades({
       )}
       {lista.isError && (
         <div className="p-4">
-          <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} />
+          <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} className="animate-surgir" />
         </div>
       )}
     </>

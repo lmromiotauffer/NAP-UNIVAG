@@ -1,6 +1,5 @@
 import { Moon, Sun } from "lucide-react";
 import { useSyncExternalStore } from "react";
-import { cn } from "../../lib/cn";
 import { aplicarTema, assinarTema, salvarPreferencia, temaAplicado, type Tema } from "./preferencias";
 
 export function AlternarTema({ className }: { className?: string }) {
@@ -9,8 +8,14 @@ export function AlternarTema({ className }: { className?: string }) {
 
   function alternar() {
     const novo: Tema = escuro ? "claro" : "escuro";
-    aplicarTema(novo);
-    salvarPreferencia("nap.tema", novo);
+    const trocar = () => {
+      aplicarTema(novo);
+      salvarPreferencia("nap.tema", novo);
+    };
+    // A tela inteira cruza de um tema ao outro (View Transitions, ~250 ms) em vez de piscar; sem suporte ou com
+    // prefers-reduced-motion, troca na hora.
+    if (typeof document.startViewTransition === "function" && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(trocar);
+    else trocar();
   }
 
   const Icone = escuro ? Sun : Moon;
@@ -20,7 +25,7 @@ export function AlternarTema({ className }: { className?: string }) {
       onClick={alternar}
       aria-label={escuro ? "Usar tema claro" : "Usar tema escuro"}
       title="Alternar entre tema claro e escuro"
-      className={cn(className)}
+      className={className}
     >
       <Icone aria-hidden="true" className="size-[18px]" />
       {escuro ? "Claro" : "Escuro"}

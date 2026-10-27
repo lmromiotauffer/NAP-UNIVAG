@@ -26,7 +26,7 @@ public sealed class GerarAcessoAssinaturaAlunoHandler(IValidator<GerarAcessoAssi
         var (_, versao) = await AutorizacaoPei.ObterVersaoAsync(peis, usuario, comando.VersaoId, ct);
         if (!AutorizacaoPei.PodeElaborar(usuario)) throw new ForbiddenException();
         if (versao.Estado != EstadoVersaoPei.AguardandoAssinaturas || versao.HashConteudo is not { } hash
-            || versao.Assinaturas.Any(a => a.Papel == PapelAssinatura.Aluno))
+            || versao.AssinaturaValida(PapelAssinatura.Aluno) is not null)
             throw new DomainException("O acesso do aluno só pode ser gerado em versão aguardando a assinatura dele.");
 
         var agora = relogio.Agora;

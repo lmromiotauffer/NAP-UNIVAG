@@ -43,6 +43,7 @@ public sealed class AtendimentoQueries(NapDbContext db, IRelogio relogio) : IAte
         db.Atendimentos.AsNoTracking()
             .Where(a => a.Id == id)
             .Select(a => new AtendimentoDetalheDto(a.Id, a.CompromissoId, a.Intervalo.Inicio, a.Intervalo.Fim,
+                EF.Functions.DateDiffMinute(a.Intervalo.Inicio, a.Intervalo.Fim),
                 a.AlunoId, db.Alunos.Where(x => x.Id == a.AlunoId).Select(x => x.NomeCompleto).FirstOrDefault() ?? "",
                 a.ProfissionalId, db.Users.Where(u => u.Id == a.ProfissionalId).Select(u => u.NomeCompleto).FirstOrDefault() ?? "",
                 a.Tipo, a.Estado, a.CompromissoId == null, a.JustificativaAvulso,

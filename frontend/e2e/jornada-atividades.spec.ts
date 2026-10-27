@@ -1,14 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { entrar, sair } from "./apoio";
-
-const diaCuiaba = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Cuiaba" }).format(d);
+import { hojeCivil, entrar, sair } from "./apoio";
 
 /** Dia útil mais recente antes de hoje: o horário já terminou e a agenda recusa fim de semana. */
 function diaUtilAnterior(): string {
   let d = new Date();
   do d = new Date(d.getTime() - 86_400_000);
-  while ([0, 6].includes(new Date(`${diaCuiaba(d)}T12:00:00Z`).getUTCDay()));
-  return diaCuiaba(d);
+  while ([0, 6].includes(new Date(`${hojeCivil(d)}T12:00:00Z`).getUTCDay()));
+  return hojeCivil(d);
 }
 
 // O banco NapE2E é recriado a cada execução e atividades não se apagam: os horários só precisam não colidir com

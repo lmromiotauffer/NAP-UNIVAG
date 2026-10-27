@@ -82,12 +82,12 @@ export function EncaminhamentoForm({ aluno: alunoFixo, aoConcluir, aoCancelar }:
 
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       <p className="m-0 text-xs text-suave">Use encaminhamento quando outro setor precisa agir; orientação interna é um atendimento.</p>
       {alunoFixo ? (
         <div className="flex flex-col gap-1">
           <span className="text-sm font-medium text-texto">Aluno</span>
-          <div className="rounded-md border border-borda bg-realce px-3 py-2 text-sm">
+          <div className="rounded-md border border-borda bg-realce px-3 py-2 text-sm break-words">
             <span className="font-semibold">{alunoFixo.nome}</span>
             {alunoFixo.matricula && <span className="text-suave"> · {alunoFixo.matricula}</span>}
           </div>
@@ -138,7 +138,7 @@ export function EncaminhamentoForm({ aluno: alunoFixo, aoConcluir, aoCancelar }:
       <Field rotulo="Motivo restrito" erro={errors.motivoRestrito?.message} dica={notaMotivoRestrito(watch("destino"))} obrigatorio>
         <Textarea maxLength={4000} {...register("motivoRestrito")} />
       </Field>
-      <Field rotulo="Resumo compartilhável" erro={errors.resumoCompartilhavel?.message} dica="Pode ser lido pela coordenação do curso." obrigatorio>
+      <Field rotulo="Resumo compartilhável" erro={errors.resumoCompartilhavel?.message} dica="Lido pelo destino; a coordenação do curso só o vê quando é o destino." obrigatorio>
         <Textarea maxLength={2000} {...register("resumoCompartilhavel")} />
       </Field>
       <Field rotulo="Observações (opcional)" erro={errors.observacoes?.message} dica="Visíveis só à equipe NAP.">

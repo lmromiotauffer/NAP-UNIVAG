@@ -1,4 +1,5 @@
 using Nap.Application.Comum;
+using Nap.Application.Features.Agenda;
 using Nap.Application.Features.Producao;
 using Nap.Application.Features.Producao.Commands;
 using Nap.Application.Tests.Fakes;
@@ -18,14 +19,16 @@ public class RealizacaoTests
     private readonly AuditoriaFalsa _auditoria = new();
     private readonly CacheConsultasFalso _cache = new();
     private readonly FechamentoRepositoryEmMemoria _fechamentos = new();
+    private readonly EscalaRepositoryEmMemoria _escalas = new();
+    private readonly FeriadoRepositoryEmMemoria _feriados = new();
 
     private RegistrarRealizacaoHandler Handler(IUsuarioAtual usuario) =>
         new(new RegistrarRealizacaoValidator(), _agenda, usuario, new RelogioFixo(), _auditoria, _uow, _cache,
-            new ServicoFechamento(_fechamentos, new RelogioFixo()));
+            new ServicoFechamento(_fechamentos, new RelogioFixo()), new ServicoEscala(_escalas, _feriados, new RelogioFixo()));
 
     private CorrigirRealizacaoHandler Corrigir(IUsuarioAtual usuario) =>
         new(new CorrigirRealizacaoValidator(), _agenda, usuario, new RelogioFixo(), _auditoria, _uow, _cache,
-            new ServicoFechamento(_fechamentos, new RelogioFixo()));
+            new ServicoFechamento(_fechamentos, new RelogioFixo()), new ServicoEscala(_escalas, _feriados, new RelogioFixo()));
 
     private Compromisso ReuniaoRealizada(Guid profissionalId, DateTimeOffset inicio)
     {
@@ -44,7 +47,7 @@ public class RealizacaoTests
     private Compromisso NovaReuniao(Guid profissionalId, DateTimeOffset inicio)
     {
         var c = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião de equipe", IntervaloHorario.Criar(inicio, inicio.AddHours(1)),
-            profissionalId, null, null, profissionalId, inicio.AddDays(-5));
+            profissionalId, null, null, profissionalId);
         _agenda.Adicionar(c);
         return c;
     }
@@ -76,6 +79,57 @@ public class RealizacaoTests
         await Assert.ThrowsAsync<ConflictException>(() => Handler(usuario).Handle(
             new RegistrarRealizacaoCommand(c.Id, "v1", Inicio, Inicio.AddMinutes(150)), TestContext.Current.CancellationToken));
         Assert.Equal(EstadoCompromisso.Agendado, c.Estado);
+    }
+
+    // Domingo 27/09 20h em Cuiabá: fora da escala padrão.
+    private static readonly DateTimeOffset DomingoNoite = new(2026, 9, 28, 0, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task Realizacao_com_inicio_novo_fora_da_escala_e_recusada()
+    {
+        var usuario = new UsuarioAtualFalso(Perfis.ProfissionalNap);
+        var c = NovaReuniao(usuario.Id, Inicio);
+
+        var ex = await Assert.ThrowsAsync<DomainException>(() => Handler(usuario).Handle(
+            new RegistrarRealizacaoCommand(c.Id, "v1", DomingoNoite, DomingoNoite.AddHours(1)), TestContext.Current.CancellationToken));
+        Assert.Equal("Fora da escala do profissional neste dia.", ex.Message);
+        Assert.Equal(EstadoCompromisso.Agendado, c.Estado);
+    }
+
+    [Fact]
+    public async Task Realizacao_com_inicio_novo_em_feriado_e_recusada()
+    {
+        var usuario = new UsuarioAtualFalso(Perfis.ProfissionalNap);
+        var c = NovaReuniao(usuario.Id, Inicio);
+        _feriados.Adicionar(Feriado.Criar(new DateOnly(2026, 10, 1), "Feriado municipal"));
+
+        await Assert.ThrowsAsync<DomainException>(() => Handler(usuario).Handle(
+            new RegistrarRealizacaoCommand(c.Id, "v1", Inicio.AddMinutes(10), Inicio.AddMinutes(70)), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Realizacao_fora_da_escala_com_autorizacao_e_aceita()
+    {
+        var usuario = new UsuarioAtualFalso(Perfis.ProfissionalNap);
+        var c = NovaReuniao(usuario.Id, Inicio);
+        _escalas.AdicionarAutorizacao(AutorizacaoForaEscala.Criar(usuario.Id, IntervaloHorario.Criar(DomingoNoite, DomingoNoite.AddHours(2)),
+            "Evento do curso", Guid.NewGuid(), DomingoNoite.AddDays(-1)));
+
+        await Handler(usuario).Handle(new RegistrarRealizacaoCommand(c.Id, "v1", DomingoNoite, DomingoNoite.AddHours(1)),
+            TestContext.Current.CancellationToken);
+        Assert.Equal(EstadoCompromisso.Concluido, c.Estado);
+    }
+
+    [Fact]
+    public async Task Correcao_com_inicio_novo_fora_da_escala_e_recusada()
+    {
+        var usuario = new UsuarioAtualFalso(Perfis.ProfissionalNap);
+        var c = ReuniaoRealizada(usuario.Id, Inicio);
+
+        await Assert.ThrowsAsync<DomainException>(() => Corrigir(usuario).Handle(
+            new CorrigirRealizacaoCommand(c.Id, "v2", DomingoNoite, DomingoNoite.AddHours(1), "Horário anotado errado"),
+            TestContext.Current.CancellationToken));
+        Assert.Equal(Inicio, c.RealizacaoInicio);
     }
 
     [Fact]

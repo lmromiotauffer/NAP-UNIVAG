@@ -19,7 +19,7 @@ public sealed class ServicoSessao(NapDbContext db, UserManager<UsuarioIdentidade
 
     /// <summary>Janela em que um refresh token já usado ainda renova (duas abas renovando com o mesmo cookie);
     /// fora dela, reapresentar um token usado é reuso e revoga a família inteira.</summary>
-    public static readonly TimeSpan ToleranciaReuso = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan ToleranciaReuso = TimeSpan.FromSeconds(5);
 
     public async Task<SessaoEmitida> EntrarAsync(string email, string senha, CancellationToken ct)
     {
@@ -36,7 +36,7 @@ public sealed class ServicoSessao(NapDbContext db, UserManager<UsuarioIdentidade
         }
         if (!await usuarios.CheckPasswordAsync(usuario, senha ?? ""))
         {
-            await usuarios.AccessFailedAsync(usuario);
+            await RegistrarFalhaAsync(usuario);
             await auditoria.RegistrarNegadoAsync("login.falha", "Usuario", usuario.Id, CancellationToken.None, semUsuario: true);
             throw new UnauthorizedException(CredenciaisInvalidas);
         }
@@ -46,7 +46,10 @@ public sealed class ServicoSessao(NapDbContext db, UserManager<UsuarioIdentidade
             throw new UnauthorizedException(CredenciaisInvalidas);
         }
 
-        await usuarios.ResetAccessFailedCountAsync(usuario);
+        // Zera direto no banco, como RegistrarFalhaAsync: o ResetAccessFailedCountAsync do Identity regrava o usuário inteiro e
+        // troca o ConcurrencyStamp, que é a versão da administração no If-Match.
+        if (usuario.AccessFailedCount > 0)
+            await db.Users.Where(u => u.Id == usuario.Id).ExecuteUpdateAsync(s => s.SetProperty(u => u.AccessFailedCount, 0), ct);
         return await EmitirAsync(usuario, Guid.CreateVersion7(), null, ct);
     }
 
@@ -62,7 +65,7 @@ public sealed class ServicoSessao(NapDbContext db, UserManager<UsuarioIdentidade
         // reivindicar o antigo (a aba que reivindicou já tem o sucessor).
         var reusoBenigno = atual.UsadoEm is { } usadoEm && agora - usadoEm <= ToleranciaReuso;
         if (atual.RevogadoEm is not null || (atual.UsadoEm is not null && !reusoBenigno))
-            throw await RevogarFamiliaAsync(atual.FamiliaId, agora, ct);
+            throw await RevogarFamiliaAsync(atual.FamiliaId, agora);
         if (atual.ExpiraEm <= agora)
             throw new UnauthorizedException();
 
@@ -71,7 +74,7 @@ public sealed class ServicoSessao(NapDbContext db, UserManager<UsuarioIdentidade
         // Leitura sem rastreamento: uma entidade já rastreada no escopo poderia trazer carimbo/ativo antigos.
         var usuario = await db.Users.AsNoTracking().SingleOrDefaultAsync(u => u.Id == atual.UsuarioId, ct);
         if (usuario is not { Ativo: true } || usuario.SecurityStamp != atual.CarimboSeguranca)
-            throw await RevogarFamiliaAsync(atual.FamiliaId, agora, ct);
+            throw await RevogarFamiliaAsync(atual.FamiliaId, agora);
 
         return await EmitirAsync(usuario, atual.FamiliaId, reusoBenigno ? null : atual.Id, ct);
     }
@@ -82,7 +85,7 @@ public sealed class ServicoSessao(NapDbContext db, UserManager<UsuarioIdentidade
         var hash = ServicoTokens.Hash(refreshToken ?? "");
         var familiaId = await db.TokensRefresh.Where(t => t.HashSha256 == hash).Select(t => (Guid?)t.FamiliaId).SingleOrDefaultAsync(ct);
         if (familiaId is { } id)
-            await RevogarFamiliaAsync(id, relogio.Agora, ct);
+            await RevogarFamiliaAsync(id, relogio.Agora);
     }
 
     /// <summary>Revoga todas as sessões (famílias de refresh) do usuário e descarta o carimbo e as sessões em cache.
@@ -112,7 +115,7 @@ public sealed class ServicoSessao(NapDbContext db, UserManager<UsuarioIdentidade
         }
         if (!await usuarios.CheckPasswordAsync(usuario, senhaAtual ?? ""))
         {
-            await usuarios.AccessFailedAsync(usuario);
+            await RegistrarFalhaAsync(usuario);
             await auditoria.RegistrarNegadoAsync("usuario.senha.trocar", "Usuario", usuario.Id, CancellationToken.None);
             throw new ValidationException(new Dictionary<string, string[]> { ["senhaAtual"] = ["Senha incorreta."] });
         }
@@ -188,11 +191,31 @@ public sealed class ServicoSessao(NapDbContext db, UserManager<UsuarioIdentidade
             usuario.DeveTrocarSenha);
     }
 
-    private async Task<UnauthorizedException> RevogarFamiliaAsync(Guid familiaId, DateTimeOffset agora, CancellationToken ct)
+    // Sem o token da requisição: um cliente que aborta (ex.: recarregar a página) não pode salvar a família de um reuso detectado.
+    private async Task<UnauthorizedException> RevogarFamiliaAsync(Guid familiaId, DateTimeOffset agora)
     {
         await db.TokensRefresh.Where(t => t.FamiliaId == familiaId && t.RevogadoEm == null)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevogadoEm, agora), ct);
-        await carimbos.EsquecerSessaoAsync(familiaId, ct);
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevogadoEm, agora), CancellationToken.None);
+        await carimbos.EsquecerSessaoAsync(familiaId, CancellationToken.None);
         return new UnauthorizedException();
+    }
+
+    /// <summary>
+    /// Conta a tentativa errada num único UPDATE. O <c>AccessFailedAsync</c> do Identity lê, soma e salva com o ConcurrencyStamp:
+    /// tentativas simultâneas perdiam a contagem e ainda trocavam a versão que a administração usa no If-Match.
+    /// Ao atingir o limite, bloqueia e zera o contador, como o Identity. Recarrega a entidade rastreada para o resto do escopo
+    /// não ver o bloqueio antigo.
+    /// </summary>
+    private async Task RegistrarFalhaAsync(UsuarioIdentidade usuario)
+    {
+        var usuarioId = usuario.Id;
+        var limite = usuarios.Options.Lockout.MaxFailedAccessAttempts;
+        DateTimeOffset? bloqueioAte = relogio.Agora + usuarios.Options.Lockout.DefaultLockoutTimeSpan;
+        await db.Users.Where(u => u.Id == usuarioId && u.LockoutEnabled)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.LockoutEnd, u => u.AccessFailedCount + 1 >= limite ? bloqueioAte : u.LockoutEnd)
+                .SetProperty(u => u.AccessFailedCount, u => u.AccessFailedCount + 1 >= limite ? 0 : u.AccessFailedCount + 1),
+                CancellationToken.None);
+        await db.Entry(usuario).ReloadAsync(CancellationToken.None);
     }
 }

@@ -11,17 +11,16 @@ import { ErrorState } from "../../components/ui/ErrorState";
 import { Modal } from "../../components/ui/Modal";
 import { Paginacao } from "../../components/ui/Paginacao";
 import { Skeleton } from "../../components/ui/Skeleton";
-import { Table, classeMolduraRolavel, th, td, soMedio, trClicavel } from "../../components/ui/Table";
+import { Table, classeAbrirLinha, classeMolduraRolavel, th, td, soLargo, soMedio, trClicavel } from "../../components/ui/Table";
 import { useToast } from "../../components/ui/Toast";
 import { cn } from "../../lib/cn";
 import { formatarInteiro } from "../../lib/format";
-import { temFiltroAtivo } from "../../lib/queryKeys";
+import { comParametro, temFiltroAtivo } from "../../lib/queryKeys";
 import { AlunoForm } from "./components/AlunoForm";
 import { ROTULO_SITUACAO, VARIANTE_SITUACAO } from "./rotulos";
 import { CHAVES_FILTRO, FiltrosAlunos, filtroDaUrl } from "./components/FiltrosAlunos";
 import { useListaAlunos } from "./hooks/useAlunos";
 
-const soLargo = "hidden lg:table-cell";
 // No celular a linha fica compacta (padrão de lista): curso, faltas e situação descem para a célula do nome.
 
 function LinhasCarregando() {
@@ -36,7 +35,7 @@ function LinhasCarregando() {
           <td className={cn(td, soLargo)}>
             <Skeleton className="h-4 w-20" />
           </td>
-          <td className={cn(td, soMedio)}>
+          <td className={cn(td, soLargo)}>
             <Skeleton className="h-4 w-24" />
           </td>
           <td className={cn(td, soLargo)}>
@@ -70,12 +69,7 @@ export function AlunosPage() {
   const podeGerenciar = pode(usuario, "alunos.gerenciar");
 
   function irParaPagina(pagina: number) {
-    setParams((atual) => {
-      const proximo = new URLSearchParams(atual);
-      if (pagina > 1) proximo.set("pagina", String(pagina));
-      else proximo.delete("pagina");
-      return proximo;
-    });
+    setParams((atual) => comParametro(atual, "pagina", pagina > 1 ? String(pagina) : null));
   }
 
   // Durante a troca de filtro os dados ainda são da consulta anterior: não mostra um total que não corresponde.
@@ -135,9 +129,11 @@ export function AlunosPage() {
         <Table caption="Alunos" aria-busy={lista.isPending || lista.isPlaceholderData} className={cn(lista.isPlaceholderData && "opacity-60")}>
           <thead>
             <tr className="border-b border-borda">
-              <th scope="col" className={th}>Aluno</th>
+              {/* min-w: a 768 px (trilho visível) as outras colunas espremiam o nome em três linhas. */}
+              <th scope="col" className={cn(th, "min-w-48")}>Aluno</th>
               <th scope="col" className={cn(th, soLargo)}>Matrícula</th>
-              <th scope="col" className={cn(th, soMedio)}>Curso</th>
+              {/* Curso só a partir de lg: entre 768 e 1023 px a coluna do nome (min-w-48) mais as demais não cabem sem rolagem. */}
+              <th scope="col" className={cn(th, soLargo)}>Curso</th>
               <th scope="col" className={cn(th, soLargo)}>Profissional</th>
               <th scope="col" className={cn(th, soMedio)}>Situação</th>
               <th scope="col" className={cn(th, soMedio, "text-right")}>Atend.</th>
@@ -155,13 +151,17 @@ export function AlunosPage() {
                     {/* A partir de `sm` o semestre fica na linha do nome; no celular o selo de situação sobe para ela. */}
                     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                       <span className="font-semibold">{a.nome}</span>
-                      <span className="text-xs text-suave max-sm:hidden">· {a.semestre}º semestre</span>
-                      <Badge variante={VARIANTE_SITUACAO[a.situacao]} className="whitespace-nowrap sm:hidden">
-                        {ROTULO_SITUACAO[a.situacao]}
-                      </Badge>
+                      {/* Semestre, matrícula e situação nulos: aluno transferido, visto pelo coordenador do curso anterior. */}
+                      {a.semestre != null && <span className="text-xs whitespace-nowrap text-suave max-sm:hidden">· {a.semestre}º semestre</span>}
+                      {a.situacao && (
+                        <Badge variante={VARIANTE_SITUACAO[a.situacao]} className="whitespace-nowrap sm:hidden">
+                          {ROTULO_SITUACAO[a.situacao]}
+                        </Badge>
+                      )}
                     </div>
                     <div className="text-xs text-suave sm:hidden">
-                      {a.curso || "—"} · {a.semestre}º semestre
+                      {a.curso || "—"}
+                      {a.semestre != null && ` · ${a.semestre}º semestre`}
                       {!!a.totalFaltas && (
                         <span className="font-semibold text-urgente">
                           {" "}
@@ -170,13 +170,20 @@ export function AlunosPage() {
                       )}
                     </div>
                   </td>
-                  <td className={cn(td, soLargo, "text-suave tabular-nums")}>{a.matricula}</td>
-                  <td className={cn(td, soMedio)}>{a.curso || "—"}</td>
+                  <td className={cn(td, soLargo, "text-suave tabular-nums")}>
+                    {a.matricula}
+                    {a.matriculaAtiva != null && <span className="text-xs"> ({a.matriculaAtiva ? "ativa" : "inativa"})</span>}
+                  </td>
+                  <td className={cn(td, soLargo)}>{a.curso || "—"}</td>
                   <td className={cn(td, soLargo)}>{a.profissional || "—"}</td>
                   <td className={cn(td, soMedio)}>
-                    <Badge variante={VARIANTE_SITUACAO[a.situacao]} className="whitespace-nowrap">
-                      {ROTULO_SITUACAO[a.situacao]}
-                    </Badge>
+                    {a.situacao ? (
+                      <Badge variante={VARIANTE_SITUACAO[a.situacao]} className="whitespace-nowrap">
+                        {ROTULO_SITUACAO[a.situacao]}
+                      </Badge>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className={cn(td, soMedio, "text-right tabular-nums")}>{formatarInteiro(a.totalAtendimentos)}</td>
                   <td className={cn(td, soMedio, "text-right tabular-nums", a.totalFaltas && "font-semibold text-urgente")}>{formatarInteiro(a.totalFaltas)}</td>
@@ -184,7 +191,7 @@ export function AlunosPage() {
                     <Link
                       to={`/alunos/${a.id}`}
                       aria-label={`Abrir ficha de ${a.nome}`}
-                      className="inline-flex items-center gap-1 rounded-sm text-xs font-semibold whitespace-nowrap text-primaria after:absolute after:inset-0 after:content-['']"
+                      className={classeAbrirLinha}
                     >
                       {/* O ::after estende o link à linha toda: o alvo de toque deixa de ser só a seta. */}
                       <span className="hidden lg:inline">Abrir ficha</span>
@@ -235,7 +242,7 @@ export function AlunosPage() {
       <section aria-label="Lista de alunos" className={cn(classeMolduraRolavel, "relative")}>
         {corpo}
       </section>
-      {lista.isError && lista.data && <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} />}
+      {lista.isError && lista.data && <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} className="animate-surgir" />}
       <Modal aberto={cadastrando} aoFechar={() => setCadastrando(false)} titulo="Cadastrar aluno">
         <AlunoForm
           aoCancelar={() => setCadastrando(false)}

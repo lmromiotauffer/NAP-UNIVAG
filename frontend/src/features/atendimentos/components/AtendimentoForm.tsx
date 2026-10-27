@@ -4,12 +4,14 @@ import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { z } from "zod";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { Dado } from "../../../components/ui/Dado";
 import { Field } from "../../../components/ui/Field";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { Textarea } from "../../../components/ui/Textarea";
 import { tratarErro } from "../../../lib/api";
-import { formatarData, formatarHora, hojeCivil, instanteCivil } from "../../../lib/format";
+import { entre } from "../../../lib/entre";
+import { formatarData, formatarIntervalo, hojeCivil, instanteCivil } from "../../../lib/format";
 import type { Compromisso } from "../../../lib/types";
 import { camposHorario, CAMPO_DA_API, ListasHorario } from "../../agenda/components/CompromissoForm";
 import { estiloAtendimento, ROTULO_TIPO_ATENDIMENTO } from "../../agenda/components/estiloCompromisso";
@@ -28,7 +30,6 @@ export const textoClinico = z
   .transform((v) => (v === "" ? null : v));
 
 const horarioAvulso = z.object(camposHorario);
-export const ehTipo = (t: string): t is TipoAtendimento => (TIPOS_ATENDIMENTO as string[]).includes(t);
 
 const esquema = z
   .object({
@@ -47,7 +48,7 @@ const esquema = z
     proximosPassos: textoClinico,
   })
   .superRefine((v, ctx) => {
-    if (!ehTipo(v.tipo)) ctx.addIssue({ code: "custom", path: ["tipo"], message: "Selecione o tipo." });
+    if (!entre(TIPOS_ATENDIMENTO, v.tipo)) ctx.addIssue({ code: "custom", path: ["tipo"], message: "Selecione o tipo." });
     if (v.estado === "Realizado" && v.demandaPrincipal == null)
       ctx.addIssue({ code: "custom", path: ["demandaPrincipal"], message: "Informe a demanda principal." });
     if (!v.avulso) return;
@@ -99,14 +100,14 @@ export function EscolhaEstado({ opcoes, registro, erro }: { opcoes: readonly Est
       </legend>
       <div className="flex flex-wrap gap-2">
         {opcoes.map((o) => (
-          <label key={o} className="flex cursor-pointer items-center gap-2 rounded-md border border-borda px-3 py-2 text-sm has-checked:border-primaria has-checked:bg-realce">
+          <label key={o} className="flex cursor-pointer items-center gap-2 rounded-md border border-borda px-3 py-2 text-sm transition-colors duration-150 pointer-coarse:min-h-11 has-checked:border-primaria has-checked:bg-realce">
             <input type="radio" value={o} className="accent-primaria" {...registro} />
             {estiloAtendimento(o).rotuloEstado}
           </label>
         ))}
       </div>
       {erro && (
-        <p id={`${id}-erro`} role="alert" className="text-xs text-urgente">
+        <p id={`${id}-erro`} role="alert" className="animate-surgir text-xs text-urgente">
           {erro}
         </p>
       )}
@@ -167,8 +168,8 @@ export function AtendimentoForm({
 
   async function enviar(d: Saida) {
     setErroGeral(null);
-    if (!ehTipo(d.tipo)) return;
-    const tipo = d.tipo;
+    const tipo = entre(TIPOS_ATENDIMENTO, d.tipo);
+    if (!tipo) return;
     // Ausência: os campos clínicos digitados antes de trocar o estado ficam no formulário, mas não saem dele.
     const realizado = d.estado === "Realizado";
     const clinicos = {
@@ -201,23 +202,16 @@ export function AtendimentoForm({
 
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       {compromisso ? (
         <dl className="grid grid-cols-1 gap-3 rounded-md bg-realce px-3 py-2.5 text-sm sm:grid-cols-3">
-          <div>
-            <dt className="text-xs text-suave">Aluno</dt>
-            <dd className="m-0 font-semibold">{compromisso.aluno ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-suave">Horário agendado</dt>
-            <dd className="m-0">
-              {formatarData(compromisso.inicio)}, {formatarHora(compromisso.inicio)}–{formatarHora(compromisso.fim)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs text-suave">Profissional</dt>
-            <dd className="m-0">{compromisso.profissional}</dd>
-          </div>
+          <Dado rotulo="Aluno" classeValor="font-semibold">
+            {compromisso.aluno ?? "—"}
+          </Dado>
+          <Dado rotulo="Horário agendado">
+            {formatarData(compromisso.inicio)}, {formatarIntervalo(compromisso.inicio, compromisso.fim)}
+          </Dado>
+          <Dado rotulo="Profissional">{compromisso.profissional}</Dado>
         </dl>
       ) : (
         <>
@@ -241,7 +235,7 @@ export function AtendimentoForm({
       )}
       <div className="grid gap-4 sm:grid-cols-2">
         <EscolhaEstado opcoes={["Realizado", "Ausente"] as const} registro={register("estado")} erro={errors.estado?.message} />
-        <Field rotulo="Tipo" erro={errors.tipo?.message} dica={watch("tipo") === "OrientacaoAcademica" ? "Registro interno do NAP; não gera retorno de outro setor" : undefined} obrigatorio>
+        <Field rotulo="Tipo" erro={errors.tipo?.message} dica={watch("tipo") === "OrientacaoAcademica" ? "Registro interno do NAP; não gera retorno de outro setor." : undefined} obrigatorio>
           <Select {...register("tipo")}>
             <option value="">Selecione</option>
             {TIPOS_ATENDIMENTO.map((t) => (
@@ -252,7 +246,8 @@ export function AtendimentoForm({
           </Select>
         </Field>
       </div>
-      {ausente ? <p className="m-0 rounded-md bg-realce px-3 py-2.5 text-sm text-suave">{NOTA_AUSENCIA}</p> : <CamposClinicos register={register} errors={errors} />}
+      {/* A nota surge no lugar dos campos clínicos ao marcar Ausente; a volta aos campos (estado padrão) chega sem animação. */}
+      {ausente ? <p className="m-0 animate-surgir rounded-md bg-realce px-3 py-2.5 text-sm text-suave">{NOTA_AUSENCIA}</p> : <CamposClinicos register={register} errors={errors} />}
       <div className="flex flex-wrap justify-end gap-2">
         {aoCancelar && (
           <Button variante="secundaria" onClick={aoCancelar} disabled={isSubmitting}>

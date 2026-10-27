@@ -38,6 +38,11 @@ public class EscalaProfissional : Entidade
 
     public bool Vigente(DateOnly data) => data >= VigenciaInicio && (VigenciaFim is null || data <= VigenciaFim);
 
+    /// <summary>A vigente na data: a de início mais recente (vigências não se sobrepõem; o desempate só evita falhar se houver
+    /// duas). Mesma escolha de <c>EscalaRepository.ObterVigenteAsync</c>, que a faz no banco.</summary>
+    public static EscalaProfissional? VigenteEm(IEnumerable<EscalaProfissional> escalas, DateOnly data) =>
+        escalas.Where(e => e.Vigente(data)).MaxBy(e => e.VigenciaInicio);
+
     // Só compara períodos; o chamador filtra pelo mesmo profissional.
     public bool SobrepoeA(EscalaProfissional outra) =>
         (VigenciaFim is null || outra.VigenciaInicio <= VigenciaFim) &&

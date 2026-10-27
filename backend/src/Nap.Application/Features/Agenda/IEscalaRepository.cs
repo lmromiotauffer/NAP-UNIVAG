@@ -20,6 +20,8 @@ public interface IEscalaRepository
     void Adicionar(EscalaProfissional e);
 
     Task<AutorizacaoForaEscala?> ObterAutorizacaoAsync(Guid id, CancellationToken ct);
+    /// <summary>Sem rastrear: só para saber qual agenda travar antes de ler a autorização de verdade.</summary>
+    Task<Guid?> ProfissionalDaAutorizacaoAsync(Guid id, CancellationToken ct);
     /// <summary>Há autorização ativa (não revogada) do profissional que cobre o instante de início.</summary>
     Task<bool> ExisteAutorizacaoAtivaAsync(Guid profissionalId, DateTimeOffset inicio, CancellationToken ct);
     /// <summary>Por início do intervalo (mais recente primeiro). <c>De</c>/<c>Ate</c>: autorizações cujo intervalo toca [De, Ate).</summary>

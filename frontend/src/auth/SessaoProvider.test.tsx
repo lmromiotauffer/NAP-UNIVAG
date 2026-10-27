@@ -128,7 +128,10 @@ describe("SessaoProvider", () => {
     await waitFor(() => expect(result.current.usuario?.id).toBe("a"));
     queryClient.setQueryData(["alunos", "ficha", "x"], { nome: "dado do usuário a" });
     usuarioDoCookie = "b"; // outra aba entrou como B e trocou o cookie
-    await act(() => api.get("/alunos"));
+    // O pedido foi enviado como A: não é reenviado como B.
+    await act(async () => {
+      await expect(api.get("/alunos")).rejects.toMatchObject({ response: { status: 401 } });
+    });
     expect(result.current.usuario?.id).toBe("b");
     expect(queryClient.getQueryCache().getAll().length).toBe(0);
   });

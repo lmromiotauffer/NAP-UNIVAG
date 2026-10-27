@@ -28,19 +28,20 @@ export function AuditoriaTab() {
   });
   const [aplicado, setAplicado] = useState(rascunho);
   const [pagina, setPagina] = useState(1);
-  // ponytail: o filtro de usuário lista só os 100 primeiros; trocar por busca por nome se a equipe passar disso.
   const usuarios = useListaUsuarios({ tamanho: 100 });
 
   // O servidor aceita no máximo 366 dias contando o dia final.
   const mensagemPeriodo =
-    rascunho.inicio && rascunho.fim && rascunho.fim < rascunho.inicio
-      ? "A data final não pode ser anterior à inicial."
-      : rascunho.inicio && rascunho.fim && rascunho.fim > somarDias(rascunho.inicio, 365)
-        ? "O período não pode passar de 366 dias."
-        : null;
+    !rascunho.inicio || !rascunho.fim
+      ? "Informe o início e o fim do período."
+      : rascunho.fim < rascunho.inicio
+        ? "A data final não pode ser anterior à inicial."
+        : rascunho.fim > somarDias(rascunho.inicio, 365)
+          ? "O período não pode passar de 366 dias."
+          : null;
   const idMensagemPeriodo = useId();
   const id = useId();
-  const periodoInvalido = !rascunho.inicio || !rascunho.fim || mensagemPeriodo !== null;
+  const periodoInvalido = mensagemPeriodo !== null;
   const filtro: FiltroAuditoria = {
     inicio: aplicado.inicio,
     fim: aplicado.fim,
@@ -53,11 +54,20 @@ export function AuditoriaTab() {
   const lista = useAuditoria(filtro);
 
   const campo = (chave: keyof Rascunho) => ({ value: rascunho[chave], onChange: (e: { target: { value: string } }) => setRascunho({ ...rascunho, [chave]: e.target.value }) });
+  // O período é obrigatório: "filtro" é só o que restringe além dele.
+  const comFiltro = !!(aplicado.usuarioId || aplicado.acao.trim() || aplicado.recurso.trim() || aplicado.resultado);
 
   function filtrar(e: FormEvent) {
     e.preventDefault();
     if (periodoInvalido) return;
     setAplicado(rascunho);
+    setPagina(1);
+  }
+
+  function limparFiltros() {
+    const limpo = { ...aplicado, usuarioId: "", acao: "", recurso: "", resultado: "" };
+    setRascunho(limpo);
+    setAplicado(limpo);
     setPagina(1);
   }
 
@@ -69,7 +79,20 @@ export function AuditoriaTab() {
       </div>
     );
   } else if (lista.data && lista.data.total === 0 && !lista.isPlaceholderData) {
-    corpo = <EmptyState icone={<ScrollText />} titulo="Nenhum evento no período" descricao="Revise o período ou os filtros selecionados." />;
+    corpo = (
+      <EmptyState
+        icone={<ScrollText />}
+        titulo="Nenhum evento no período"
+        descricao="Revise o período ou os filtros selecionados."
+        acao={
+          comFiltro && (
+            <Button variante="secundaria" tamanho="sm" onClick={limparFiltros}>
+              Limpar filtros
+            </Button>
+          )
+        }
+      />
+    );
   } else {
     corpo = (
       <>
@@ -132,12 +155,13 @@ export function AuditoriaTab() {
   return (
     <>
       {/* Mesma barra das outras listagens: período com rótulos na linha; demais rótulos só para leitores de tela (o texto do campo já diz o que é). */}
-      <form onSubmit={filtrar} className="flex flex-wrap items-center gap-2">
+      <form role="search" aria-label="Filtrar auditoria" onSubmit={filtrar} className="flex flex-wrap items-center gap-2">
         {/* Cada rótulo quebra de linha junto com o seu campo: no celular o "Até" não fica órfão no fim da linha. */}
         <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 text-denso text-suave sm:w-auto">
           <span className="flex flex-1 items-center gap-1.5">
             <label htmlFor={`${id}-inicio`}>De</label>
-            <Input id={`${id}-inicio`} type="date" required {...campo("inicio")} className={classeData} />
+            {/* Cada data só fica inválida pelo que lhe cabe: a faixa (ordem, 366 dias) é apontada no "Até". */}
+            <Input id={`${id}-inicio`} type="date" required {...campo("inicio")} invalid={!rascunho.inicio} aria-describedby={mensagemPeriodo ? idMensagemPeriodo : undefined} className={classeData} />
           </span>
           <span className="flex flex-1 items-center gap-1.5">
             <label htmlFor={`${id}-fim`}>Até</label>
@@ -146,7 +170,7 @@ export function AuditoriaTab() {
               type="date"
               required
               {...campo("fim")}
-              invalid={periodoInvalido}
+              invalid={!rascunho.fim || (!!rascunho.inicio && periodoInvalido)}
               aria-describedby={mensagemPeriodo ? idMensagemPeriodo : undefined}
               className={classeData}
             />
@@ -184,14 +208,14 @@ export function AuditoriaTab() {
         </Button>
       </form>
       {mensagemPeriodo && (
-        <p id={idMensagemPeriodo} role="alert" className="m-0 text-sm text-urgente">
+        <p id={idMensagemPeriodo} role="alert" className="m-0 animate-surgir text-sm text-urgente">
           {mensagemPeriodo}
         </p>
       )}
       <section aria-label="Eventos de auditoria" className={classeMolduraRolavel}>
         {corpo}
       </section>
-      {lista.isError && lista.data && <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} />}
+      {lista.isError && lista.data && <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} className="animate-surgir" />}
     </>
   );
 }

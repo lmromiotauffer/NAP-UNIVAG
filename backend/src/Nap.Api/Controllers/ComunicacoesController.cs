@@ -17,8 +17,8 @@ public class ComunicacoesController : ControllerBase
 {
     [HttpGet]
     public Task<PagedResult<MensagemListaDto>> Listar([FromServices] ListarCaixaHandler handler, CaixaMensagens caixa, string? busca,
-        Guid? alunoId, CancellationToken ct, int pagina = 1, int tamanho = 20) =>
-        handler.Handle(new ListarCaixaQuery(caixa, busca, alunoId, pagina, tamanho), ct);
+        Guid? alunoId, Guid? encaminhamentoId, CancellationToken ct, int pagina = 1, int tamanho = 20) =>
+        handler.Handle(new ListarCaixaQuery(caixa, busca, alunoId, pagina, tamanho, encaminhamentoId), ct);
 
     [HttpGet("{id:guid}")]
     public Task<MensagemDetalheDto> Obter(Guid id, [FromServices] ObterMensagemHandler handler, CancellationToken ct) =>
@@ -30,8 +30,8 @@ public class ComunicacoesController : ControllerBase
 
     [HttpGet("destinatarios")]
     public Task<IReadOnlyList<DestinatarioDto>> ListarDestinatarios([FromServices] ListarDestinatariosHandler handler, Guid? alunoId,
-        Guid? encaminhamentoId, CancellationToken ct) =>
-        handler.Handle(new ListarDestinatariosQuery(alunoId, encaminhamentoId), ct);
+        Guid? encaminhamentoId, Guid? cursoId, CancellationToken ct) =>
+        handler.Handle(new ListarDestinatariosQuery(alunoId, encaminhamentoId, cursoId), ct);
 
     [HttpPost("rascunhos")]
     [Idempotente(nameof(Obter))]

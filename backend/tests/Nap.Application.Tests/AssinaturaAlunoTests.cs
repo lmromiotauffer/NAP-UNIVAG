@@ -39,7 +39,7 @@ public class AssinaturaAlunoTests
         _peis.Adicionar(pei);
         _versao = pei.Versoes.Single();
         _versao.EnviarParaRevisao(antes);
-        _versao.AprovarRevisao(Guid.NewGuid(), CalculadoraHashPei.Calcular(_versao.Conteudo), antes);
+        _versao.AprovarRevisao(Guid.NewGuid(), antes);
         (_acesso, _token, _codigo) = AcessoAssinaturaPei.Gerar(_versao.Id, _versao.HashConteudo!, _prof, _relogio.Agora.AddHours(-1));
         _acessos.Adicionar(_acesso);
     }
@@ -135,7 +135,7 @@ public class AssinaturaAlunoTests
         _versao.AtualizarConteudo(new ConteudoPei(null, "Outras necessidades", null, null, null, null,
             PeriodoVigencia.Criar(new DateOnly(2026, 8, 1), new DateOnly(2027, 7, 31))), _relogio.Agora);
         _versao.EnviarParaRevisao(_relogio.Agora);
-        _versao.AprovarRevisao(Guid.NewGuid(), CalculadoraHashPei.Calcular(_versao.Conteudo), _relogio.Agora);
+        _versao.AprovarRevisao(Guid.NewGuid(), _relogio.Agora);
         Assert.NotEqual(_acesso.HashConteudo, _versao.HashConteudo);
         await Da404(() => Abrir(_token, _codigo));
         await Da404(() => Assinar(_codigo));
@@ -163,7 +163,7 @@ public class AssinaturaAlunoTests
     [Fact]
     public async Task Nome_com_apostrofo_tipografico_e_travessao_equivale_ao_ascii()
     {
-        _alunos.Alunos.Single().AtualizarDados("Ana D'Ávila Souza-Lima", 3, null, null, _prof);
+        _alunos.Alunos.Single().AtualizarDados("Ana D'Ávila Souza-Lima", 3, null, null, _prof, true);
 
         await Assinar(_codigo, "ana d’avila souza–lima");
 

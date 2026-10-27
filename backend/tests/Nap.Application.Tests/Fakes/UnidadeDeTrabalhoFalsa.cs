@@ -32,6 +32,8 @@ public sealed class UnidadeDeTrabalhoFalsa(List<string>? ordem = null) : IUnidad
             throw new ConflictException("O registro foi alterado por outra pessoa. Recarregue e tente novamente");
     }
 
+    public string Versao(object entidade) => $"v{Salvamentos}";
+
     public Task<T> EmTransacaoAsync<T>(Func<CancellationToken, Task<T>> operacao, CancellationToken ct)
     {
         ordem?.Add("transacao");

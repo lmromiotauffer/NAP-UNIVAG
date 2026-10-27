@@ -1,4 +1,4 @@
-import { CalendarClock, ChevronLeft, ChevronRight, Mail, Maximize2, UserX } from "lucide-react";
+import { CalendarClock, ChevronLeft, ChevronRight, LayoutGrid, Mail, Maximize2, UserX } from "lucide-react";
 import { useId, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { ehCoordenacao, pode, rotuloPerfil } from "../../auth/capacidades";
@@ -18,11 +18,11 @@ import { Skeleton } from "../../components/ui/Skeleton";
 import type { VarianteSemantica } from "../../components/ui/variantes";
 import { cn } from "../../lib/cn";
 import {
+  diaValido,
   formatarDataLonga,
   formatarDuracao,
   formatarHora,
   formatarInteiro,
-  DIA,
   formatarMesCurto,
   formatarPercentual,
   formatarSemana,
@@ -217,7 +217,7 @@ function Filtros({ segunda, hoje }: { segunda: string; hoje: string }) {
           <ChevronLeft aria-hidden="true" className="size-4" />
         </Button>
         <span aria-live="polite" className="px-1 text-center sm:whitespace-nowrap">
-          Semana {formatarSemana(segunda)}
+          Semana {formatarSemana(segunda, 6)}
         </span>
         <Button
           tamanho="icone"
@@ -245,7 +245,7 @@ export function PainelPage() {
 
   // Só coordenação/administração filtra; para os demais a API força o escopo e a tela não oferece filtros.
   const semanaUrl = params.get("semana") ?? "";
-  const segunda = segundaDoDia(coordenacao && DIA.test(semanaUrl) && !Number.isNaN(Date.parse(semanaUrl)) ? semanaUrl : hoje);
+  const segunda = segundaDoDia(coordenacao && diaValido(semanaUrl) ? semanaUrl : hoje);
   const filtro: FiltroPainel = coordenacao
     ? { semana: segunda, profissionalId: params.get("profissionalId") || undefined, cursoId: params.get("cursoId") || undefined }
     : {};
@@ -310,11 +310,12 @@ export function PainelPage() {
       {cabecalho}
       <Legenda />
       {/* delay-100 só no esmaecer: troca de semana em menos de 100 ms não pisca; a volta ao normal é imediata. */}
-      <div aria-busy={painel.isPlaceholderData} className={cn("flex flex-col gap-3 transition-opacity", painel.isPlaceholderData && "opacity-60 delay-100")}>
-          {painel.isError && <ErrorState erro={painel.error} aoTentarNovamente={() => void painel.refetch()} />}
+      <div aria-busy={painel.isPlaceholderData} className={cn("flex flex-col gap-3 transition-opacity duration-150", painel.isPlaceholderData && "opacity-60 delay-100")}>
+        {/* Aqui o erro (refetch em segundo plano) é inserido sobre o painel já visível, não substitui skeleton: chega como os demais avisos. */}
+        {painel.isError && <ErrorState erro={painel.error} aoTentarNovamente={() => void painel.refetch()} className="animate-surgir" />}
         {semBlocos && !podeComunicar && (
           <Card>
-            <EmptyState titulo="Nada para mostrar" descricao="Não há indicadores disponíveis para o seu perfil." />
+            <EmptyState icone={<LayoutGrid />} titulo="Nada para mostrar" descricao="Não há indicadores disponíveis para o seu perfil." />
           </Card>
         )}
         {(semana || podeComunicar) && (
@@ -352,7 +353,7 @@ export function PainelPage() {
                 valor={mensagens.data?.naoLidas ?? null}
                 formatar={formatarInteiro}
                 base="recebidas na sua caixa de entrada"
-                motivoNaoCalculado={mensagens.isError ? "Não foi possível carregar." : null}
+                motivoNaoCalculado={mensagens.isError ? "Não foi possível carregar." : mensagens.isPending ? "Carregando…" : null}
                 Icone={Mail}
                 classeIcone="text-info"
                 aoVerDetalhes={() => void navigate("/comunicacoes")}
@@ -419,14 +420,14 @@ export function PainelPage() {
             />
           )}
           {p.porProfissional && (
-            <Secao titulo="Produção por profissional · semana" nota={juntarNotas(formatarSemana(p.periodo.inicio), notaEquipe)} className={cn("col-span-full", quatroColunas && "2xl:col-span-1")}>
+            <Secao titulo="Produção por profissional · semana" nota={juntarNotas(formatarSemana(p.periodo.inicio, 6), notaEquipe)} className={cn("col-span-full", quatroColunas && "2xl:col-span-1")}>
               <TabelaPorProfissional dados={p.porProfissional} />
             </Secao>
           )}
         </div>
       </div>
 
-      <Modal aberto={detalhe === "semana"} aoFechar={() => setDetalhe(null)} titulo={`Atendimentos · semana ${formatarSemana(p.periodo.inicio)}`}>
+      <Modal aberto={detalhe === "semana"} aoFechar={() => setDetalhe(null)} titulo={`Atendimentos · semana ${formatarSemana(p.periodo.inicio, 6)}`}>
         {semana && (
           <div className="flex flex-col gap-4 text-sm">
             {p.periodo.parcial && <p className="m-0 text-suave">Semana em andamento: os números contam só até agora.</p>}

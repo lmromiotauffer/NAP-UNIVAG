@@ -48,13 +48,13 @@ public class ProducaoQueriesTests(SqlServerFixture fx)
             db.EscalasProfissional.Add(EscalaProfissional.Criar(prof, new DateOnly(2015, 1, 1), null,
                 Enum.GetValues<DayOfWeek>().Where(d => d is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
                     .Select(d => new FaixaEscala(d, new TimeOnly(8, 0), new TimeOnly(12, 0), d == DayOfWeek.Friday)).ToList()));
-            db.Compromissos.Add(Compromisso.Criar(TipoCompromisso.Bloqueio, "Consulta médica", Intervalo(ter, 10, 0, 11, 0), prof, null, null, prof, Agora));
-            var cancelado = Compromisso.Criar(TipoCompromisso.Bloqueio, "Cancelado", Intervalo(qua, 8, 0, 9, 0), prof, null, null, prof, Agora);
-            cancelado.Cancelar("Não precisou", prof, Agora);
+            db.Compromissos.Add(Compromisso.Criar(TipoCompromisso.Bloqueio, "Consulta médica", Intervalo(ter, 10, 0, 11, 0), prof, null, null, prof));
+            var cancelado = Compromisso.Criar(TipoCompromisso.Bloqueio, "Cancelado", Intervalo(qua, 8, 0, 9, 0), prof, null, null, prof);
+            cancelado.Cancelar("Não precisou");
             db.Compromissos.Add(cancelado);
             // Remarcado não desconta: só o substituto (13–14h, fora da faixa) vale.
-            var remarcado = Compromisso.Criar(TipoCompromisso.Bloqueio, "Remarcado", Intervalo(qua, 10, 0, 11, 0), prof, null, null, prof, Agora);
-            db.Compromissos.AddRange(remarcado, remarcado.Remarcar(Intervalo(qua, 13, 0, 14, 0), prof, Agora));
+            var remarcado = Compromisso.Criar(TipoCompromisso.Bloqueio, "Remarcado", Intervalo(qua, 10, 0, 11, 0), prof, null, null, prof);
+            db.Compromissos.AddRange(remarcado, remarcado.Remarcar(Intervalo(qua, 13, 0, 14, 0), prof));
             db.Feriados.Add(Feriado.Criar(sex, "Feriado de teste"));
 
             db.Atendimentos.Add(Atendimento(aluno, prof, Intervalo(seg, 8, 0, 9, 0), EstadoAtendimento.Realizado));
@@ -62,8 +62,7 @@ public class ProducaoQueriesTests(SqlServerFixture fx)
             db.Atendimentos.Add(Atendimento(aluno, prof, Intervalo(ter, 8, 0, 8, 50), EstadoAtendimento.Ausente));
             db.Atendimentos.Add(Atendimento(aluno, prof, Intervalo(qua, 9, 0, 10, 0), EstadoAtendimento.Realizado, TipoAtendimento.Reuniao));
 
-            var reuniao = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião de equipe", Intervalo(qui, 9, 0, 10, 0), prof, null, null, prof,
-                Em(Segunda, 7));
+            var reuniao = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião de equipe", Intervalo(qui, 9, 0, 10, 0), prof, null, null, prof);
             reuniao.RegistrarRealizacao(Intervalo(qui, 9, 15, 10, 30), prof, Agora); // efetivo: 75 min
             db.Compromissos.Add(reuniao);
             // Na sexta (feriado) a atividade inteira vira tempo extra.
@@ -71,7 +70,7 @@ public class ProducaoQueriesTests(SqlServerFixture fx)
                 "Roda de conversa", "Atividade sem agenda", prof, Agora));
             // Compromisso de atividade concluído pelo registro: conta só o registro (30 min), nunca o compromisso.
             var compromissoAtividade = Compromisso.Criar(TipoCompromisso.AtividadeCurso, "Oficina", Intervalo(qui, 11, 0, 11, 30), prof, null, null,
-                prof, Em(Segunda, 7));
+                prof);
             db.Compromissos.Add(compromissoAtividade);
             db.AtividadesCurso.Add(AtividadeCurso.RegistrarDeCompromisso(compromissoAtividade, Intervalo(qui, 11, 0, 11, 30), curso,
                 TipoAtividade.RodaConversa, "Oficina", prof, Agora));
@@ -99,6 +98,33 @@ public class ProducaoQueriesTests(SqlServerFixture fx)
         Assert.Equal(new ValorProducaoDto(null, 595), Total(CategoriaProducao.Ociosidade));
         Assert.Equal(new TaxaDto(1m / 3, 1, 3, null), p.TaxaAusencia);
         Assert.False(p.Periodo.Parcial);
+    }
+
+    [Fact]
+    public async Task Fatos_incluem_ocorrencias_e_pendentes_que_entram_no_primeiro_dia_pela_virada()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var prof = await fx.CriarProfissionalAsync();
+        var curso = await fx.CriarCursoAsync();
+        var aluno = (await RoundTripTests.CriarAlunoAsync(fx, curso, prof)).Id;
+        var semana = Segunda.AddDays(14);
+        var domingo = semana.AddDays(-1);
+        var virada = IntervaloHorario.Criar(Em(domingo, 23, 0), Em(semana, 1, 0));
+        var antes = IntervaloHorario.Criar(Em(domingo, 20, 0), Em(domingo, 21, 0));
+
+        await using (var db = fx.CriarContexto())
+        {
+            db.Atendimentos.Add(Atendimento(aluno, prof, virada, EstadoAtendimento.Realizado));
+            db.Atendimentos.Add(Atendimento(aluno, prof, antes, EstadoAtendimento.Realizado)); // termina antes da semana: fora
+            db.Compromissos.Add(Compromisso.Criar(TipoCompromisso.Atendimento, "Sem desfecho", virada, prof, aluno, null, prof));
+            await db.SaveChangesAsync(ct);
+        }
+
+        await using var leitura = fx.CriarContexto();
+        var fatos = await new ProducaoQueries(leitura, new RelogioTeste(Agora)).CarregarFatosAsync([prof], semana, semana.AddDays(6), null, ct);
+
+        Assert.Equal(virada.Inicio, Assert.Single(fatos.Ocorrencias).Inicio);
+        Assert.Equal(virada.Inicio, Assert.Single(fatos.Pendentes).Inicio);
     }
 
     [Fact]
@@ -134,6 +160,35 @@ public class ProducaoQueriesTests(SqlServerFixture fx)
         // O atendimento de quinta (após desativar) conta na categoria, mas sem faixa vira tempo extra.
         var t = filtrado.Tempo!;
         Assert.Equal((1200, 60, 1200 - 60, 60), (t.Capacidade, t.ProducaoNaEscala, t.Ociosidade, t.TempoExtra));
+    }
+
+    [Fact]
+    public async Task Profissional_que_saiu_da_equipe_mantem_a_producao_passada()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var prof = await fx.CriarProfissionalAsync(nome: $"Saiu da equipe {Guid.NewGuid():N}");
+        var curso = await fx.CriarCursoAsync();
+        var aluno = (await RoundTripTests.CriarAlunoAsync(fx, curso, prof)).Id;
+        var segunda = Segunda.AddDays(21);
+        await using (var db = fx.CriarContexto())
+        {
+            db.Atendimentos.Add(Atendimento(aluno, prof, Intervalo(segunda, 8, 0, 9, 0), EstadoAtendimento.Realizado));
+            await db.SaveChangesAsync(ct);
+            var u = await db.Users.FindAsync([prof], ct);
+            u!.Perfil = Perfis.CoordenadorCurso;
+            await db.SaveChangesAsync(ct);
+        }
+
+        await using var leitura = fx.CriarContexto();
+        var admin = new UsuarioAtualTeste(Guid.NewGuid(), Perfis.Administrador);
+        var equipe = await Handler(leitura, admin).Handle(new ObterProducaoQuery(TipoPeriodo.Semana, segunda, null, null), ct);
+        // Duas semanas depois: a consulta também carrega a semana anterior, que também fica sem fatos.
+        var semFatos = await Handler(leitura, admin).Handle(new ObterProducaoQuery(TipoPeriodo.Semana, segunda.AddDays(14), null, null), ct);
+
+        var linha = Assert.Single(equipe.PorProfissional!, l => l.ProfissionalId == prof);
+        Assert.Equal(new ValorProducaoDto(1, 60), linha.Categorias.Single(c => c.Chave == CategoriaProducao.AtendimentosRealizados).Total);
+        // Sem fatos no período, o perfil atual decide: fora da equipe NAP, fora da produção.
+        Assert.DoesNotContain(semFatos.PorProfissional!, l => l.ProfissionalId == prof);
     }
 
     [Fact]
@@ -237,5 +292,30 @@ public class ProducaoQueriesTests(SqlServerFixture fx)
         Assert.Equal(new ValorProducaoDto(1, 60), p.Categorias.Single(c => c.Chave == CategoriaProducao.AtendimentosRealizados).Total);
         var t = p.Tempo!;
         Assert.Equal((0, 0, 0, 60), (t.Capacidade, t.ProducaoNaEscala, t.Ociosidade, t.TempoExtra));
+    }
+
+    [Fact]
+    public async Task Ausencias_no_filtro_de_curso_usam_a_escala_real()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var admin = await fx.CriarProfissionalAsync(Perfis.Administrador);
+        var curso = await fx.CriarCursoAsync();
+        var aluno = (await RoundTripTests.CriarAlunoAsync(fx, curso, admin)).Id;
+        var segunda = Segunda.AddDays(28);
+        await using (var db = fx.CriarContexto())
+        {
+            db.Atendimentos.Add(Atendimento(aluno, admin, Intervalo(segunda, 8, 0, 9, 0), EstadoAtendimento.Ausente));
+            await db.SaveChangesAsync(ct);
+        }
+
+        await using var leitura = fx.CriarContexto();
+        async Task<ValorProducaoDto> Ausencias(Guid? cursoId) =>
+            (await Handler(leitura, new UsuarioAtualTeste(Guid.NewGuid(), Perfis.CoordenadorNap))
+                .Handle(new ObterProducaoQuery(TipoPeriodo.Semana, segunda, admin, cursoId), ct))
+            .Categorias.Single(c => c.Chave == CategoriaProducao.Ausencias).Total;
+
+        // Administrador sem escala própria não tem escala: a falta conta 0 min com ou sem o recorte (antes, o recorte caía na padrão).
+        Assert.Equal(new ValorProducaoDto(1, 0), await Ausencias(null));
+        Assert.Equal(new ValorProducaoDto(1, 0), await Ausencias(curso));
     }
 }

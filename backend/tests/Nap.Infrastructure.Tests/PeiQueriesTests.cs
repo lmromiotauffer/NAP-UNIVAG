@@ -23,7 +23,7 @@ public class PeiQueriesTests(SqlServerFixture fx)
         var v1 = pei.Versoes.Single();
         if (ate >= EstadoVersaoPei.EmRevisao) v1.EnviarParaRevisao(enviadaEm ?? Agora.AddMinutes(1));
         var hash = CalculadoraHashPei.Calcular(v1.Conteudo);
-        if (ate >= EstadoVersaoPei.AguardandoAssinaturas) v1.AprovarRevisao(coord, hash, Agora.AddMinutes(2));
+        if (ate >= EstadoVersaoPei.AguardandoAssinaturas) v1.AprovarRevisao(coord, Agora.AddMinutes(2));
         if (ate >= EstadoVersaoPei.Assinada)
         {
             v1.RegistrarAssinatura(PapelAssinatura.Profissional, prof, "Profissional", hash, "e1", Agora.AddMinutes(3));
@@ -151,10 +151,15 @@ public class PeiQueriesTests(SqlServerFixture fx)
         var antigo = Coordenador(c.Curso);
         var novo = Coordenador(cursoNovo);
 
-        Assert.NotNull(await consultas.ObterVersaoAsync(v1.Id, EscopoPeis.Para(antigo), antigo, ct));
+        var detalhe = await consultas.ObterVersaoAsync(v1.Id, EscopoPeis.Para(antigo), antigo, ct);
+        Assert.NotNull(detalhe);
+        // Detalhe (e o PDF, que sai dele) mostram o curso da publicação, não o atual.
+        Assert.Equal(await db.Cursos.Where(x => x.Id == c.Curso).Select(x => x.Nome).SingleAsync(ct), detalhe.Curso);
         Assert.Single((await consultas.ListarDoAlunoAsync(c.Aluno, EscopoPeis.Para(antigo), antigo.Id, ct))!);
-        Assert.Null(await consultas.ObterVersaoAsync(v1.Id, EscopoPeis.Para(novo), novo, ct));
-        Assert.Empty((await consultas.ListarDoAlunoAsync(c.Aluno, EscopoPeis.Para(novo), novo.Id, ct))!);
+        // O coordenador do curso atual vê a versão publicada em vigor (é quem aplica o plano) e pode registrar ciência.
+        var doNovo = await consultas.ObterVersaoAsync(v1.Id, EscopoPeis.Para(novo), novo, ct);
+        Assert.True(doNovo!.Acoes.PodeRegistrarCiencia);
+        Assert.Single((await consultas.ListarDoAlunoAsync(c.Aluno, EscopoPeis.Para(novo), novo.Id, ct))!);
     }
 
     [Fact]

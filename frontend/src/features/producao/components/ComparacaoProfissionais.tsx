@@ -27,7 +27,7 @@ export function ComparacaoProfissionais({ linhas }: { linhas: NonNullable<Produc
             <th scope="row" className="py-1 pr-2 font-normal">{l.profissional}</th>
             <td className="py-1 pl-3 text-right tabular-nums">{formatarInteiro(total(l, "AtendimentosRealizados")?.ocorrencias)}</td>
             <td className="py-1 pl-3 text-right tabular-nums">{formatarInteiro(total(l, "Ausencias")?.ocorrencias)}</td>
-            <td className="py-1 pl-3 text-right whitespace-nowrap">{textoTaxa(l.taxaAusencia)}</td>
+            <td className="py-1 pl-3 text-right whitespace-nowrap tabular-nums">{textoTaxa(l.taxaAusencia)}</td>
             <td className="py-1 pl-3 text-right tabular-nums">{l.tempo ? minutosComSinal(l.tempo.capacidade) : "—"}</td>
             <td className="py-1 pl-3 text-right tabular-nums">{l.tempo ? minutosComSinal(l.tempo.ociosidade) : "—"}</td>
             <td className="py-1 pl-3 text-right tabular-nums">{formatarInteiro(l.pendentes)}</td>

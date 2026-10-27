@@ -7,12 +7,12 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Paginacao } from "../../../components/ui/Paginacao";
 import { Skeleton } from "../../../components/ui/Skeleton";
-import { Table, th, td, soMedio, trClicavel } from "../../../components/ui/Table";
+import { Table, classeAbrirLinha, th, td, soMedio, trClicavel } from "../../../components/ui/Table";
 import { cn } from "../../../lib/cn";
-import { formatarDataCivil, formatarInteiro, hojeCivil } from "../../../lib/format";
+import { diasEntre, formatarDataCivil, formatarInteiro, hojeCivil } from "../../../lib/format";
 import type { EncaminhamentoLista } from "../../../lib/types";
 import { useListaEncaminhamentos } from "../hooks/useEncaminhamentos";
-import { diasEntre, especialidadeEDestino, NAO_COMPARTILHADO, ROTULO_DESTINO, ROTULO_ESPECIALIDADE, ROTULO_ESTADO, VARIANTE_ESTADO } from "../rotulos";
+import { especialidadeEDestino, NAO_COMPARTILHADO, ROTULO_DESTINO, ROTULO_ESPECIALIDADE, ROTULO_ESTADO, VARIANTE_ESTADO } from "../rotulos";
 import type { FiltroEncaminhamentos } from "../services/encaminhamentoService";
 
 /** Estado sempre em texto; o selo de prazo fica ao lado, sem substituir o estado. */
@@ -44,7 +44,7 @@ export function ListaEncaminhamentos({
   comFiltro: boolean;
   /** Na ficha do aluno a coluna Aluno é redundante. */
   semAluno?: boolean;
-  vazio: { titulo: string; descricao: string; acao?: ReactNode; acaoFiltro?: ReactNode };
+  vazio: { titulo: string; descricao: string; acaoFiltro?: ReactNode };
   aoMudarPagina: (pagina: number) => void;
 }) {
   const lista = useListaEncaminhamentos(filtro);
@@ -60,7 +60,7 @@ export function ListaEncaminhamentos({
     return comFiltro ? (
       <EmptyState icone={<Send />} titulo="Nenhum encaminhamento corresponde aos filtros" descricao="Revise os filtros selecionados." acao={vazio.acaoFiltro} />
     ) : (
-      <EmptyState icone={<Send />} titulo={vazio.titulo} descricao={vazio.descricao} acao={vazio.acao} />
+      <EmptyState icone={<Send />} titulo={vazio.titulo} descricao={vazio.descricao} />
     );
   if (lista.data && lista.data.itens.length === 0 && !lista.isPlaceholderData)
     return (
@@ -84,7 +84,17 @@ export function ListaEncaminhamentos({
             {!semAluno && <th scope="col" className={th}>Aluno</th>}
             <th scope="col" className={cn(th, soMedio)}>Especialidade → destino</th>
             <th scope="col" className={cn(th, soMedio)}>Envio</th>
-            <th scope="col" className={th}>Estado</th>
+            <th scope="col" className={th}>
+              {/* Na ficha (sem a coluna Aluno) a célula do estado junta especialidade e envio no celular: o cabeçalho acompanha. */}
+              {semAluno ? (
+                <>
+                  <span className="sm:hidden">Encaminhamento</span>
+                  <span className="max-sm:hidden">Estado</span>
+                </>
+              ) : (
+                "Estado"
+              )}
+            </th>
             <th scope="col" className={th}>
               <span className="sr-only">Ações</span>
             </th>
@@ -118,12 +128,17 @@ export function ListaEncaminhamentos({
                   <td className={cn(td, soMedio, "text-rotulo whitespace-nowrap text-suave tabular-nums")}>{formatarDataCivil(e.data)}</td>
                   <td className={td}>
                     <SeloEstado {...e} />
+                    {semAluno && (
+                      <div className="mt-0.5 text-rotulo text-suave sm:hidden">
+                        {especialidadeEDestino(e)} · {formatarDataCivil(e.data)}
+                      </div>
+                    )}
                   </td>
                   <td className={cn(td, "text-right max-sm:pl-0")}>
                     <Link
                       to={`/encaminhamentos/${e.id}`}
                       aria-label={`Abrir encaminhamento de ${e.aluno} (${e.especialidade ? ROTULO_ESPECIALIDADE[e.especialidade] : NAO_COMPARTILHADO}, ${formatarDataCivil(e.data)})`}
-                      className="inline-flex items-center gap-1 rounded-sm text-xs font-semibold whitespace-nowrap text-primaria after:absolute after:inset-0 after:content-['']"
+                      className={classeAbrirLinha}
                     >
                       {/* O ::after estende o link à linha toda: o alvo de toque deixa de ser só a seta. */}
                       <span className="hidden lg:inline">Abrir</span>
@@ -150,7 +165,7 @@ export function ListaEncaminhamentos({
       )}
       {lista.isError && (
         <div className="p-4">
-          <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} />
+          <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} className="animate-surgir" />
         </div>
       )}
     </>

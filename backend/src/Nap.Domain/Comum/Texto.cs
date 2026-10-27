@@ -10,4 +10,13 @@ public static class Texto
         if (char.IsHighSurrogate(texto[corte - 1])) corte--;
         return texto[..corte] + sufixo;
     }
+
+    /// <summary>Trim e tamanho entre <paramref name="minimo"/> e <paramref name="maximo"/>; <paramref name="nome"/> abre a mensagem ("O motivo").</summary>
+    public static string Validar(string? texto, int minimo, int maximo, string nome)
+    {
+        texto = (texto ?? string.Empty).Trim();
+        if (texto.Length < minimo || texto.Length > maximo)
+            throw new DomainException($"{nome} deve ter de {minimo} a {maximo} caracteres.");
+        return texto;
+    }
 }

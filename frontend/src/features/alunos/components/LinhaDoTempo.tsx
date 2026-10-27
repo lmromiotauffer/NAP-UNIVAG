@@ -18,9 +18,9 @@ function PaginaLinhaDoTempo({ alunoId, pagina, ultima, aoCarregarMais }: { aluno
     return (
       <>
         {Array.from({ length: 4 }, (_, i) => (
-          <li key={i} className="grid grid-cols-[88px_1fr] gap-3 pb-4">
+          <li key={i} className="grid grid-cols-[88px_16px_1fr] gap-3 pb-4">
             <Skeleton className="h-4" />
-            <Skeleton className="h-9" />
+            <Skeleton className="col-start-3 h-9" />
           </li>
         ))}
       </>

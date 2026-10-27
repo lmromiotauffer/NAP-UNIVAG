@@ -121,9 +121,26 @@ body:has(dialog:modal) main {
     }
   }
 
-  /* Popover (menu "Mais"): mesma chegada do diálogo, subindo de baixo, porque ele abre acima da barra inferior. */
+  /* Popover (menu "Mais"): mesma chegada do diálogo, subindo de baixo, porque ele abre acima da barra inferior.
+     Ao contrário do diálogo, o conteúdo não desmonta ao fechar: sai em 150 ms (mais curto que a chegada), e
+     display/overlay esperam o fade terminar (allow-discrete) antes de tirá-lo da camada superior. */
+  [popover] {
+    opacity: 0;
+    translate: 0 var(--entrada-y, 0.5rem);
+    transition:
+      opacity 150ms ease-in,
+      translate 150ms ease-in,
+      display 150ms allow-discrete,
+      overlay 150ms allow-discrete;
+  }
   [popover]:popover-open {
-    transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), translate 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 1;
+    translate: 0 0;
+    transition:
+      opacity 200ms cubic-bezier(0.16, 1, 0.3, 1),
+      translate 200ms cubic-bezier(0.16, 1, 0.3, 1),
+      display 200ms allow-discrete,
+      overlay 200ms allow-discrete;
   }
   @starting-style {
     [popover]:popover-open {

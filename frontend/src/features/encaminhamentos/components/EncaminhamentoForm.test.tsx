@@ -57,7 +57,7 @@ describe("EncaminhamentoForm", () => {
   it("Motivo_restrito_obrigatorio_com_mensagem_em_portugues", async () => {
     const { user } = montar();
     expect(screen.getByText("Visível só à equipe NAP e, nos destinos SIP e Clínica Escola, ao serviço de destino.")).toBeInTheDocument();
-    expect(screen.getByText("Pode ser lido pela coordenação do curso.")).toBeInTheDocument();
+    expect(screen.getByText("Lido pelo destino; a coordenação do curso só o vê quando é o destino.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Encaminhar" }));
 
     expect(await screen.findByText("Informe o motivo restrito (mínimo 3 caracteres).")).toBeInTheDocument();

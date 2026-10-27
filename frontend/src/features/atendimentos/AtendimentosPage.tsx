@@ -10,13 +10,14 @@ import { Select } from "../../components/ui/Select";
 import { classeMolduraRolavel } from "../../components/ui/Table";
 import { useToast } from "../../components/ui/Toast";
 import { cn } from "../../lib/cn";
-import { DIA } from "../../lib/format";
+import { diaValido } from "../../lib/format";
 import { comParametro, paginaDaUrl, queryKeys } from "../../lib/queryKeys";
 import { BuscaAluno } from "../alunos/components/BuscaAluno";
 import { alunoService } from "../alunos/services/alunoService";
 import { estiloAtendimento, ROTULO_TIPO_ATENDIMENTO } from "../agenda/components/estiloCompromisso";
 import { useProfissionais } from "../compartilhado/catalogos";
-import { AtendimentoForm, ehTipo, TIPOS_ATENDIMENTO } from "./components/AtendimentoForm";
+import { entre } from "../../lib/entre";
+import { AtendimentoForm, TIPOS_ATENDIMENTO } from "./components/AtendimentoForm";
 import { DetalheAtendimento } from "./components/DetalheAtendimento";
 import { ListaAtendimentos } from "./components/ListaAtendimentos";
 import type { FiltroAtendimentos } from "./services/atendimentoService";
@@ -33,14 +34,15 @@ function filtroDaUrl(params: URLSearchParams): FiltroAtendimentos {
   const texto = (c: string) => params.get(c)?.trim() || undefined;
   f.alunoId = texto("alunoId");
   f.profissionalId = texto("profissionalId");
-  const estado = texto("estado");
-  if (ESTADOS.some((e) => e === estado)) f.estado = estado as (typeof ESTADOS)[number];
-  const tipo = texto("tipo") ?? "";
-  if (ehTipo(tipo)) f.tipo = tipo;
+  const estado = entre(ESTADOS, texto("estado"));
+  if (estado) f.estado = estado;
+  const tipo = entre(TIPOS_ATENDIMENTO, texto("tipo"));
+  if (tipo) f.tipo = tipo;
   const de = texto("de");
-  if (de && DIA.test(de)) f.de = de;
+  // diaValido, não só a forma: "2026-13-99" num link antigo iria para a API e viraria 400.
+  if (de && diaValido(de)) f.de = de;
   const ate = texto("ate");
-  if (ate && DIA.test(ate)) f.ate = ate;
+  if (ate && diaValido(ate)) f.ate = ate;
   f.pagina = paginaDaUrl(params);
   return f;
 }
@@ -150,7 +152,6 @@ export function AtendimentosPage() {
           aoMudarPagina={(p) => alterar("pagina", p > 1 ? String(p) : null)}
           aoAbrir={(a) => alterar("id", a)}
           vazio={{
-            icone: <ClipboardList />,
             titulo: "Nenhum atendimento registrado",
             descricao: "Registre atendimentos a partir da agenda ou como avulsos.",
             acao: (

@@ -70,6 +70,47 @@ public class SessaoTests(SqlServerFixture sql, RedisFixture redis) : IAsyncDispo
     }
 
     [Fact]
+    public async Task Tentativas_erradas_simultaneas_contam_todas_para_o_bloqueio()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var usuario = await CriarUsuarioAsync();
+        var versaoAntes = usuario.ConcurrencyStamp;
+
+        await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => Task.Run(async () =>
+        {
+            await using var escopo = _sp.CreateAsyncScope();
+            await Assert.ThrowsAsync<UnauthorizedException>(() =>
+                escopo.ServiceProvider.GetRequiredService<ServicoSessao>().EntrarAsync(usuario.Email!, "SenhaErrada2026", ct));
+        }, ct)));
+
+        await using (var escopo = _sp.CreateAsyncScope())
+            await Assert.ThrowsAsync<UnauthorizedException>(() =>
+                escopo.ServiceProvider.GetRequiredService<ServicoSessao>().EntrarAsync(usuario.Email!, Senha, ct));
+        await using var db = sql.CriarContexto();
+        var salvo = await db.Users.AsNoTracking().SingleAsync(u => u.Id == usuario.Id, ct);
+        Assert.NotNull(salvo.LockoutEnd);
+        Assert.Equal(versaoAntes, salvo.ConcurrencyStamp); // a versão da administração não muda a cada senha errada
+    }
+
+    [Fact]
+    public async Task Login_certo_apos_senha_errada_zera_a_contagem_sem_trocar_a_versao()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var usuario = await CriarUsuarioAsync();
+        var versaoAntes = usuario.ConcurrencyStamp;
+        await using var escopo = _sp.CreateAsyncScope();
+        var sessao = escopo.ServiceProvider.GetRequiredService<ServicoSessao>();
+        await Assert.ThrowsAsync<UnauthorizedException>(() => sessao.EntrarAsync(usuario.Email!, "SenhaErrada2026", ct));
+
+        await sessao.EntrarAsync(usuario.Email!, Senha, ct);
+
+        await using var db = sql.CriarContexto();
+        var salvo = await db.Users.AsNoTracking().SingleAsync(u => u.Id == usuario.Id, ct);
+        Assert.Equal(0, salvo.AccessFailedCount);
+        Assert.Equal(versaoAntes, salvo.ConcurrencyStamp); // nem no login certo que zera a contagem
+    }
+
+    [Fact]
     public async Task Refresh_rotaciona_e_token_antigo_revoga_a_familia()
     {
         var ct = TestContext.Current.CancellationToken;

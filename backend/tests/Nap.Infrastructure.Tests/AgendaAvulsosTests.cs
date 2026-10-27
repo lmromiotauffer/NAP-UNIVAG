@@ -75,7 +75,7 @@ public class AgendaAvulsosTests(SqlServerFixture fx)
 
         var dentro = Avulsa(prof, Local(15, 10));
         var compromisso = Compromisso.Criar(TipoCompromisso.AtividadeCurso, "Roda", IntervaloHorario.Criar(Local(16, 9), Local(16, 10)),
-            prof, null, null, prof, agora);
+            prof, null, null, prof);
         // O registro ajusta o intervalo (11h–12h) depois do agendado (9h–10h).
         var vinculada = AtividadeCurso.RegistrarDeCompromisso(compromisso, IntervaloHorario.Criar(Local(16, 11), Local(16, 12)), null,
             TipoAtividade.RodaConversa, "Roda de conversa", prof, agora);

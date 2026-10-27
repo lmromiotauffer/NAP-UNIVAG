@@ -13,8 +13,10 @@ import { Modal } from "../../components/ui/Modal";
 import { SecaoTexto as Texto } from "../../components/ui/Secao";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/Toast";
+import { cn } from "../../lib/cn";
 import { formatarDataCivil, formatarDataHora } from "../../lib/format";
 import type { EncaminhamentoDetalhe } from "../../lib/types";
+import { ComunicacoesVinculadas } from "../comunicacoes/components/ComunicacoesVinculadas";
 import { EscreverMensagem } from "../comunicacoes/components/EscreverMensagem";
 import { CancelarEncaminhamentoDialog } from "./components/CancelarEncaminhamentoDialog";
 import { SeloEstado } from "./components/ListaEncaminhamentos";
@@ -34,6 +36,8 @@ import {
 const Dado = (p: { rotulo: string; children: ReactNode }) => <DadoBase classeValor="text-corpo" {...p} />;
 
 function Evolucoes({ e }: { e: EncaminhamentoDetalhe }) {
+  // Só o retorno registrado depois da montagem chega animado: na abertura a seção já vem com o surgir do <main>.
+  const [tamanhoInicial] = useState(e.evolucoes.length);
   return (
     <section aria-labelledby="titulo-evolucoes" className={classeSecao}>
       <h2 id="titulo-evolucoes" className="m-0 font-titulo text-base font-bold">
@@ -44,16 +48,17 @@ function Evolucoes({ e }: { e: EncaminhamentoDetalhe }) {
       ) : (
         <ol className="m-0 flex list-none flex-col gap-3 border-l-2 border-borda p-0 pl-4">
           {e.evolucoes.map((ev, i) => (
-            <li key={`${ev.em}-${i}`} className="flex flex-col gap-0.5 text-corpo">
+            // Ordem cronológica com chave estável: depois de registrar um retorno só o item novo monta, e chega animado no fim da linha.
+            <li key={`${ev.em}-${i}`} className={cn("flex flex-col gap-0.5 text-corpo", i >= tamanhoInicial && "animate-surgir")}>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <strong className="font-semibold">{ROTULO_ACAO[ev.acao]}</strong>
                 <Badge variante={VARIANTE_ESTADO[ev.estadoNovo]}>{ROTULO_ESTADO[ev.estadoNovo]}</Badge>
                 {ev.data != null && <span className="text-suave">em {formatarDataCivil(ev.data)}</span>}
               </div>
-              <div className="text-xs text-suave">
+              <div className="text-rotulo text-suave">
                 {ev.autor} · registrado {formatarDataHora(ev.em)}
               </div>
-              {ev.texto != null && <p className="m-0 whitespace-pre-line">{ev.texto}</p>}
+              {ev.texto != null && <p className="m-0 break-words whitespace-pre-line">{ev.texto}</p>}
             </li>
           ))}
         </ol>
@@ -156,31 +161,42 @@ export function DetalheEncaminhamentoPage() {
         )}
       </header>
 
-      <div className="grid max-w-5xl gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="flex flex-col gap-3">
-          <section aria-label="Datas" className={classeSecao}>
-            <dl className="m-0 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <Dado rotulo="Encaminhado em">{formatarDataCivil(e.data)}</Dado>
-              <Dado rotulo="Solicitante">{e.solicitante}</Dado>
-              <Dado rotulo="Acolhimento">{formatarDataCivil(e.dataAcolhimento)}</Dado>
-              <Dado rotulo="Início do atendimento">{formatarDataCivil(e.dataPrimeiroAtendimento)}</Dado>
-              <Dado rotulo="Encerramento">{formatarDataCivil(e.dataEncerramento)}</Dado>
-              <Dado rotulo="Última atualização">{formatarDataHora(e.atualizadoEm)}</Dado>
-            </dl>
-          </section>
-          <Texto titulo="Resumo compartilhável" nota="Pode ser lido pela coordenação do curso.">
-            {e.resumoCompartilhavel}
-          </Texto>
-          {/* Campos restritos chegam nulos para quem não pode vê-los: a seção some, sem placeholder. */}
-          {e.motivoRestrito != null && (
-            <Texto titulo="Motivo restrito" nota={notaMotivoRestrito(e.destino)}>
-              {e.motivoRestrito}
-            </Texto>
-          )}
-          {e.observacoes != null && (
-            <Texto titulo="Observações" nota="Visíveis só à equipe NAP.">
-              {e.observacoes}
-            </Texto>
+      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-3">
+          {/* Card de texto que sobra sozinho na última linha ocupa a largura toda. */}
+          <div className="grid gap-3 md:grid-cols-2 md:[&>:last-child:nth-child(even)]:col-span-2">
+            <section aria-label="Datas" className={`${classeSecao} md:col-span-2`}>
+              <dl className="m-0 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+                <Dado rotulo="Encaminhado em">{formatarDataCivil(e.data)}</Dado>
+                <Dado rotulo="Solicitante">{e.solicitante}</Dado>
+                <Dado rotulo="Acolhimento">{formatarDataCivil(e.dataAcolhimento)}</Dado>
+                <Dado rotulo="Início do atendimento">{formatarDataCivil(e.dataPrimeiroAtendimento)}</Dado>
+                <Dado rotulo="Encerramento">{formatarDataCivil(e.dataEncerramento)}</Dado>
+                <Dado rotulo="Última atualização">{formatarDataHora(e.atualizadoEm)}</Dado>
+              </dl>
+            </section>
+            {/* Campos restritos chegam nulos para quem não pode vê-los: a seção some, sem placeholder. */}
+            {e.resumoCompartilhavel != null && (
+              <Texto titulo="Resumo compartilhável" nota="Lido pelo destino; a coordenação do curso só o vê quando é o destino.">
+                {e.resumoCompartilhavel}
+              </Texto>
+            )}
+            {e.motivoRestrito != null && (
+              <Texto titulo="Motivo restrito" nota={notaMotivoRestrito(e.destino)}>
+                {e.motivoRestrito}
+              </Texto>
+            )}
+            {e.observacoes != null && (
+              <Texto titulo="Observações" nota="Visíveis só à equipe NAP.">
+                {e.observacoes}
+              </Texto>
+            )}
+          </div>
+          {podeComunicar && (
+            <ComunicacoesVinculadas
+              vinculo={{ encaminhamentoId: e.id }}
+              descricaoVazia="As mensagens sobre este encaminhamento de que você participa aparecem aqui."
+            />
           )}
         </div>
         <Evolucoes e={e} />

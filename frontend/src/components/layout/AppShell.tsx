@@ -51,7 +51,8 @@ export function AppShell() {
     rotaAnterior.current = pathname;
     document.getElementById("conteudo")?.focus();
   }, [pathname]);
-  // Um selo só: mensagens recebidas não lidas + notificações não lidas. Uma contagem que falhe não zera a outra.
+  // Um selo só: mensagens recebidas não lidas + notificações não lidas (a API não conta as de "Nova mensagem", já somadas
+  // pelas mensagens). Uma contagem que falhe não zera a outra.
   const comunica = pode(usuario, "comunicacoes");
   const naoLidas = (useContagemMensagens(comunica).data?.naoLidas ?? 0) + (useContagemNotificacoes(comunica).data?.naoLidas ?? 0);
   // SIP e coordenação de curso (sem agenda) têm a barra curta: Encaminhamentos, o trabalho principal deles, sai do "Mais".

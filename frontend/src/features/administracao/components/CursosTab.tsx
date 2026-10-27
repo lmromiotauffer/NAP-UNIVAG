@@ -48,7 +48,7 @@ export function CursosTab() {
     corpo = <EmptyState icone={<GraduationCap />} titulo="Nenhum curso cadastrado" descricao="Cadastre os cursos para vincular alunos e coordenadores." />;
   } else {
     corpo = (
-      <Table caption="Cursos">
+      <Table caption="Cursos" aria-busy={cursos.isPending}>
         <thead>
           <tr className="border-b border-borda">
             <th scope="col" className={th}>Curso</th>
@@ -141,7 +141,7 @@ export function CursosTab() {
         carregando={situacao.isPending}
       >
         {erro && (
-          <p role="alert" className="text-sm text-urgente">
+          <p role="alert" className="animate-surgir text-sm text-urgente">
             {erro}
           </p>
         )}

@@ -72,7 +72,8 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 });
 
 builder.Services.AddOptions<OpcoesLimiteLogin>().Bind(builder.Configuration.GetSection("Nap:LimiteLogin"))
-    .Validate(o => o.Tentativas > 0 && o.JanelaSegundos > 0, "Nap:LimiteLogin: Tentativas e JanelaSegundos devem ser maiores que zero.")
+    .Validate(o => o.Tentativas > 0 && o.TentativasAssinatura > 0 && o.JanelaSegundos > 0,
+        "Nap:LimiteLogin: Tentativas, TentativasAssinatura e JanelaSegundos devem ser maiores que zero.")
     .ValidateOnStart();
 builder.Services.AddRateLimiter(LimiteLogin.Configurar);
 
@@ -149,6 +150,10 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
+// Sem a string do Redis o cache de consultas não resolveria e toda escrita e o painel dariam 500: recusa partir antes de
+// tocar o banco (--migrar) ou criar o administrador.
+if (string.IsNullOrWhiteSpace(app.Configuration.GetConnectionString("Redis")))
+    throw new InvalidOperationException(Nap.Infrastructure.DependencyInjection.MensagemRedisNaoConfigurado);
 if (semear && !app.Environment.IsDevelopment())
     throw new InvalidOperationException("--semear só pode ser usado no ambiente Development.");
 if (migrar || semear)
@@ -177,7 +182,12 @@ if (posicaoAdmin >= 0)
     return;
 }
 if (!gerandoOpenApi && app.Services.GetRequiredService<IArmazenamentoArquivos>() is ArmazenamentoEmDisco disco)
+{
+    // Relativo cai dentro da pasta publicada (some no próximo deploy) e, com várias instâncias, em discos diferentes.
+    if (!app.Environment.IsDevelopment() && !Path.IsPathRooted(app.Services.GetRequiredService<IOptions<OpcoesArquivos>>().Value.Diretorio))
+        throw new InvalidOperationException("Nap:Arquivos:Diretorio deve ser um caminho absoluto num volume persistente e compartilhado entre as instâncias.");
     disco.VerificarGravacao();
+}
 
 app.UseExceptionHandler();
 if (!app.Environment.IsDevelopment())
@@ -216,6 +226,9 @@ app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => fa
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") }).AllowAnonymous();
 // Rotas do SPA (inclusive /assinar/:token, sem login) caem no index.html; /api e /health inexistentes continuam fora.
 app.MapFallbackToFile("{*caminho:regex(^(?!api(/|$)|health(/|$)).*$)}", "index.html", opcoesEstaticos).AllowAnonymous();
+
+// Deploy que muda o formato dos DTOs do painel: sem isto, o Redis serviria o JSON antigo por até 5 min (chave por geração).
+if (!gerandoOpenApi) await app.Services.GetRequiredService<ICacheConsultas>().InvalidarAreaAsync(CancellationToken.None);
 
 app.Run();
 

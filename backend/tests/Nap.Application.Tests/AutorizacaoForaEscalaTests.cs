@@ -138,8 +138,9 @@ public class AutorizacaoForaEscalaTests
         var curta = await Assert.ThrowsAsync<ValidationException>(() => Criar().Handle(
             new CriarAutorizacaoForaEscalaCommand(_prof, Em(Segunda, 18), Em(Segunda, 20), "abc"), Ct));
         Assert.Contains("justificativa", curta.Erros.Keys);
-        await Assert.ThrowsAsync<DomainException>(() => Criar().Handle(
+        var longa = await Assert.ThrowsAsync<ValidationException>(() => Criar().Handle(
             new CriarAutorizacaoForaEscalaCommand(_prof, Em(Segunda, 6), Em(Segunda, 19), "Plantão do vestibular"), Ct)); // 13 h
+        Assert.Contains("fim", longa.Erros.Keys);
     }
 
     [Fact]

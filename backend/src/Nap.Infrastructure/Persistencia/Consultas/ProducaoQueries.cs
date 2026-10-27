@@ -18,6 +18,15 @@ public sealed class ProducaoQueries(NapDbContext db, IRelogio relogio) : IProduc
             .CountAsync(c => c.Intervalo.Inicio >= de && c.Intervalo.Inicio < ate, ct);
     }
 
+    public Task<int> ContarEmAndamentoAsync(Guid profissionalId, DateOnly semana, CancellationToken ct)
+    {
+        var de = relogio.Fuso.InicioDoDia(semana);
+        var ate = relogio.Fuso.InicioDoDia(semana.AddDays(7));
+        var agora = relogio.Agora;
+        return PainelQueries.AguardandoDesfecho(db, profissionalId)
+            .CountAsync(c => c.Intervalo.Inicio >= de && c.Intervalo.Inicio < ate && c.Intervalo.Fim >= agora, ct);
+    }
+
     public async Task<IReadOnlyList<SemanaProducaoDto>> ListarSemanasAsync(IReadOnlyList<ProfissionalDto> profissionais, DateOnly inicio,
         DateOnly fim, CancellationToken ct)
     {
@@ -31,7 +40,7 @@ public sealed class ProducaoQueries(NapDbContext db, IRelogio relogio) : IProduc
                 .Where(c => ids.Contains(c.ProfissionalId) && c.Intervalo.Inicio >= de && c.Intervalo.Inicio < ate)
                 .Select(c => new { c.ProfissionalId, c.Intervalo.Inicio })
                 .ToListAsync(ct))
-            .GroupBy(c => (c.ProfissionalId, ServicoFechamento.SegundaDe(DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(c.Inicio, relogio.Fuso).DateTime))))
+            .GroupBy(c => (c.ProfissionalId, ServicoFechamento.SegundaDe(relogio.Fuso.DataLocal(c.Inicio))))
             .ToDictionary(g => g.Key, g => g.Count());
 
         var fechamentos = (await db.FechamentosSemanais.AsNoTracking()
@@ -67,9 +76,12 @@ public sealed class ProducaoQueries(NapDbContext db, IRelogio relogio) : IProduc
         var ids = profissionais.ToList();
         var de = relogio.Fuso.InicioDoDia(inicio);
         var ate = relogio.Fuso.InicioDoDia(fim.AddDays(1));
+        // Por sobreposição, como os bloqueios: o trecho que entra no primeiro dia conta nele (o handler descarta o resto).
+        // Começo recuado pela duração máxima (IntervaloHorario), para o filtro pelo início continuar usando o índice.
+        var deSobreposicao = de.AddHours(-PainelQueries.DuracaoMaximaHoras);
 
-        var atendimentos = (await PainelQueries.Atendimentos(db, relogio, de, ate, null, cursoId)
-                .Where(a => ids.Contains(a.ProfissionalId)
+        var atendimentos = (await PainelQueries.Atendimentos(db, relogio, deSobreposicao, ate, null, cursoId)
+                .Where(a => ids.Contains(a.ProfissionalId) && a.Intervalo.Fim > de
                     && (a.Estado == EstadoAtendimento.Realizado || a.Estado == EstadoAtendimento.Ausente))
                 .Select(a => new { a.ProfissionalId, a.Estado, a.Tipo, a.Intervalo.Inicio, a.Intervalo.Fim })
                 .ToListAsync(ct))
@@ -78,23 +90,31 @@ public sealed class ProducaoQueries(NapDbContext db, IRelogio relogio) : IProduc
                 a.Inicio, a.Fim, a.Tipo != TipoAtendimento.Reuniao));
         // Atividades só pelos registros (nunca pelo compromisso concluído); institucionais (sem curso) ficam fora do filtro de curso.
         var atividades = (await db.AtividadesCurso.AsNoTracking()
-                .Where(a => ids.Contains(a.ProfissionalId) && a.Intervalo.Inicio >= de && a.Intervalo.Inicio < ate
-                    && (cursoId == null || a.CursoId == cursoId))
+                .Where(a => ids.Contains(a.ProfissionalId) && a.Intervalo.Inicio >= deSobreposicao && a.Intervalo.Inicio < ate
+                    && a.Intervalo.Fim > de && (cursoId == null || a.CursoId == cursoId))
                 .Select(a => new { a.ProfissionalId, a.Intervalo.Inicio, a.Intervalo.Fim })
                 .ToListAsync(ct))
             .Select(a => new OcorrenciaProfissional(a.ProfissionalId, CategoriaProducao.AtividadesCursos, a.Inicio, a.Fim, false));
         var pendentes = (await PainelQueries.SemDesfecho(db, relogio, null, cursoId)
-                .Where(c => ids.Contains(c.ProfissionalId) && c.Intervalo.Inicio >= de && c.Intervalo.Inicio < ate)
+                .Where(c => ids.Contains(c.ProfissionalId) && c.Intervalo.Inicio >= deSobreposicao && c.Intervalo.Inicio < ate
+                    && c.Intervalo.Fim > de)
                 .Select(c => new { c.ProfissionalId, c.Intervalo.Inicio, c.Intervalo.Fim })
                 .ToListAsync(ct))
             .Select(c => new IntervaloProfissional(c.ProfissionalId, c.Inicio, c.Fim)).ToList();
+        // Escala e feriados não se recortam por curso, mas entram no recorte: as Ausências contam só o tempo dentro da escala.
+        var escalas = await db.EscalasProfissional.AsNoTracking()
+            .Where(e => ids.Contains(e.ProfissionalId) && e.VigenciaInicio <= fim && (e.VigenciaFim == null || e.VigenciaFim >= inicio))
+            .ToListAsync(ct);
+        var feriados = await db.Feriados.AsNoTracking().Where(f => f.Ativo && f.Data >= inicio && f.Data <= fim).Select(f => f.Data)
+            .ToListAsync(ct);
         if (cursoId is not null)
-            return new FatosProducao([], [], [], atendimentos.Concat(atividades).ToList(), pendentes, []);
+            return new FatosProducao(escalas, feriados, [], atendimentos.Concat(atividades).ToList(), pendentes, []);
 
         // Só as realizações registradas, pelo horário efetivo.
         var realizados = (await db.Compromissos.AsNoTracking()
                 .Where(c => ids.Contains(c.ProfissionalId) && c.Estado == EstadoCompromisso.Concluido
-                    && c.RealizacaoInicio != null && c.RealizacaoInicio >= de && c.RealizacaoInicio < ate)
+                    && c.RealizacaoInicio != null && c.RealizacaoInicio >= deSobreposicao && c.RealizacaoInicio < ate
+                    && c.RealizacaoFim > de)
                 .Select(c => new { c.ProfissionalId, c.Tipo, Inicio = c.RealizacaoInicio!.Value, Fim = c.RealizacaoFim!.Value })
                 .ToListAsync(ct))
             .Select(c => new OcorrenciaProfissional(c.ProfissionalId, c.Tipo.CategoriaDe()!.Value, c.Inicio, c.Fim, false));
@@ -102,15 +122,10 @@ public sealed class ProducaoQueries(NapDbContext db, IRelogio relogio) : IProduc
         var bloqueios = (await db.Compromissos.AsNoTracking()
                 .Where(c => ids.Contains(c.ProfissionalId) && c.Tipo == TipoCompromisso.Bloqueio
                     && c.Estado != EstadoCompromisso.Cancelado && c.Estado != EstadoCompromisso.Remarcado
-                    && c.Intervalo.Inicio < ate && c.Intervalo.Fim > de)
+                    && c.Intervalo.Inicio >= deSobreposicao && c.Intervalo.Inicio < ate && c.Intervalo.Fim > de)
                 .Select(c => new { c.ProfissionalId, c.Intervalo.Inicio, c.Intervalo.Fim })
                 .ToListAsync(ct))
             .Select(c => new IntervaloProfissional(c.ProfissionalId, c.Inicio, c.Fim)).ToList();
-        var escalas = await db.EscalasProfissional.AsNoTracking()
-            .Where(e => ids.Contains(e.ProfissionalId) && e.VigenciaInicio <= fim && (e.VigenciaFim == null || e.VigenciaFim >= inicio))
-            .ToListAsync(ct);
-        var feriados = await db.Feriados.AsNoTracking().Where(f => f.Ativo && f.Data >= inicio && f.Data <= fim).Select(f => f.Data)
-            .ToListAsync(ct);
         var ajustes = await db.AjustesProducao.AsNoTracking()
             .Where(a => ids.Contains(a.ProfissionalId) && a.Data >= inicio && a.Data <= fim)
             .ToListAsync(ct);

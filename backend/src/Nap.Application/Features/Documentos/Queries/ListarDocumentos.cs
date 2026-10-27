@@ -17,13 +17,17 @@ public class ListarDocumentosValidator : AbstractValidator<ListarDocumentosQuery
 }
 
 public sealed class ListarDocumentosHandler(IValidator<ListarDocumentosQuery> validador, IDocumentoQueries consultas,
-    IUsuarioAtual usuario)
+    IUsuarioAtual usuario, IAuditoria auditoria, IUnidadeDeTrabalho uow)
 {
     public async Task<PagedResult<DocumentoDto>> Handle(ListarDocumentosQuery query, CancellationToken ct = default)
     {
         await validador.ValidarAsync(query, ct);
         var escopo = EscopoDocumentos.Para(usuario, query.IncluirArquivados);
-        return await consultas.ListarAsync(query.AlunoId, escopo, query.Pagina, query.Tamanho, ct)
+        var pagina = await consultas.ListarAsync(query.AlunoId, escopo, query.Pagina, query.Tamanho, ct)
             ?? throw new NotFoundException("Aluno");
+        // Descrições e nomes de arquivo (laudos, relatórios) são sensíveis: a leitura fica no rastro, como na linha do tempo.
+        auditoria.Registrar("documento.lista.consulta", "Aluno", query.AlunoId);
+        await uow.SalvarAsync(ct);
+        return pagina;
     }
 }

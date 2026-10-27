@@ -206,16 +206,32 @@ public class PeisTests(ApiFactory fabrica)
         var peiId = (await ana.GetFromJsonAsync<JsonElement>($"/api/peis/versoes/{versaoId}")).GetProperty("peiId").GetGuid();
 
         var novaId = await IdAsync(await ana.PostAsync($"/api/peis/{peiId}/versoes", null));
-        Assert.Equal(2, (await ana.GetFromJsonAsync<JsonElement>($"/api/peis/versoes/{novaId}")).GetProperty("numero").GetInt32());
-        await Ok(AcaoAsync(ana, novaId, "conteudo", new
+        var criada = await ana.GetFromJsonAsync<JsonElement>($"/api/peis/versoes/{novaId}");
+        Assert.Equal(2, criada.GetProperty("numero").GetInt32());
+        var salva = await AcaoAsync(ana, novaId, "conteudo", new
         {
             necessidadesEducacionais = "Revisada", vigenciaInicio = "2027-08-01", vigenciaFim = "2028-07-31",
-        }, HttpMethod.Put));
-        var editada = (await ana.GetFromJsonAsync<JsonElement>($"/api/peis/versoes/{novaId}")).GetProperty("conteudo");
+        }, HttpMethod.Put);
+        Assert.Equal(HttpStatusCode.OK, salva.StatusCode);
+        var detalhe = await ana.GetFromJsonAsync<JsonElement>($"/api/peis/versoes/{novaId}");
+        // O PUT devolve a versão gravada: a mesma que a leitura mostra (a próxima edição usa ela no If-Match).
+        Assert.Equal(detalhe.GetProperty("versao").GetString(),
+            (await salva.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("versao").GetString());
+        var editada = detalhe.GetProperty("conteudo");
         Assert.Equal(("Revisada", "2028-07-31"), (editada.GetProperty("necessidadesEducacionais").GetString(),
             editada.GetProperty("vigenciaFim").GetString()));
 
-        Assert.Equal(HttpStatusCode.NoContent, (await ana.DeleteAsync($"/api/peis/versoes/{novaId}")).StatusCode);
+        // Tela antiga (versão de antes da edição): o descarte não apaga o texto gravado depois.
+        Task<HttpResponseMessage> Descartar(string? versao)
+        {
+            var req = new HttpRequestMessage(HttpMethod.Delete, $"/api/peis/versoes/{novaId}");
+            req.Headers.Add("If-Match", $"\"{versao}\"");
+            return ana.SendAsync(req);
+        }
+        Assert.Equal(HttpStatusCode.PreconditionRequired, (await ana.DeleteAsync($"/api/peis/versoes/{novaId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Descartar(criada.GetProperty("versao").GetString())).StatusCode);
+        var atual = (await ana.GetFromJsonAsync<JsonElement>($"/api/peis/versoes/{novaId}")).GetProperty("versao").GetString();
+        Assert.Equal(HttpStatusCode.NoContent, (await Descartar(atual)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await ana.GetAsync($"/api/peis/versoes/{novaId}")).StatusCode);
     }
 }

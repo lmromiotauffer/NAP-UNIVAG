@@ -11,4 +11,11 @@ public sealed class MensagemRepository(NapDbContext db) : IMensagemRepository
     public void Adicionar(Mensagem m) => db.Mensagens.Add(m);
 
     public void Remover(Mensagem m) => db.Mensagens.Remove(m);
+
+    public async Task<bool> RecarregarAsync(Mensagem m, CancellationToken ct)
+    {
+        var entrada = db.Entry(m);
+        await entrada.ReloadAsync(ct);
+        return entrada.State != EntityState.Detached;
+    }
 }

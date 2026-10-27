@@ -19,7 +19,7 @@ public class IfMatchTests(ApiFactory fabrica)
     {
         nomeCompleto = nome, semestre = ficha.GetProperty("semestre").GetInt32(),
         necessidadesEducacionais = (string?)null, observacoesAcademicas = (string?)null,
-        profissionalResponsavelId = ficha.GetProperty("profissionalId").GetGuid(),
+        profissionalResponsavelId = ficha.GetProperty("profissionalId").GetGuid(), matriculaAtiva = true,
     };
 
     private static async Task<(Guid Id, JsonElement Ficha)> NovoAlunoAsync(HttpClient cliente)
@@ -51,6 +51,36 @@ public class IfMatchTests(ApiFactory fabrica)
     }
 
     [Fact]
+    public async Task Edicao_de_aluno_com_etag_fraca_e_aceita()
+    {
+        var cliente = await fabrica.ClienteComo("ana.beatriz@nap.demo");
+        var (id, ficha) = await NovoAlunoAsync(cliente);
+        var req = new HttpRequestMessage(HttpMethod.Put, $"/api/alunos/{id}") { Content = JsonContent.Create(CorpoAluno("Etag Fraca", ficha)) };
+        req.Headers.TryAddWithoutValidation("If-Match", $"W/\"{ficha.GetProperty("versao").GetString()}\"");
+
+        var resposta = await cliente.SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.NoContent, resposta.StatusCode);
+    }
+
+    [Fact]
+    public async Task Edicao_de_aluno_com_if_match_malformado_retorna_400_e_nao_altera()
+    {
+        var cliente = await fabrica.ClienteComo("ana.beatriz@nap.demo");
+        var (id, ficha) = await NovoAlunoAsync(cliente);
+        var req = new HttpRequestMessage(HttpMethod.Put, $"/api/alunos/{id}") { Content = JsonContent.Create(CorpoAluno("If-Match Invalido", ficha)) };
+        req.Headers.TryAddWithoutValidation("If-Match", "\"abc\"");
+
+        var resposta = await cliente.SendAsync(req);
+
+        // Cabeçalho inválido é erro do cliente (400 no campo ifMatch), não conflito de concorrência (409).
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+        Assert.Contains("ifMatch", await resposta.Content.ReadAsStringAsync());
+        var depois = await cliente.GetFromJsonAsync<JsonElement>($"/api/alunos/{id}");
+        Assert.Equal(ficha.GetProperty("nome").GetString(), depois.GetProperty("nome").GetString());
+    }
+
+    [Fact]
     public async Task Edicao_de_aluno_sem_if_match_retorna_428_e_nao_altera()
     {
         var cliente = await fabrica.ClienteComo("ana.beatriz@nap.demo");
@@ -62,6 +92,25 @@ public class IfMatchTests(ApiFactory fabrica)
         Assert.Equal("application/problem+json", resposta.Content.Headers.ContentType?.MediaType);
         var depois = await cliente.GetFromJsonAsync<JsonElement>($"/api/alunos/{id}");
         Assert.Equal(ficha.GetProperty("nome").GetString(), depois.GetProperty("nome").GetString());
+    }
+
+    [Fact]
+    public async Task Edicao_de_aluno_sem_matricula_ativa_retorna_400_e_nao_inativa()
+    {
+        var cliente = await fabrica.ClienteComo("ana.beatriz@nap.demo");
+        var (id, ficha) = await NovoAlunoAsync(cliente);
+        var semCampo = new
+        {
+            nomeCompleto = "Sem Matricula Ativa", semestre = ficha.GetProperty("semestre").GetInt32(),
+            necessidadesEducacionais = (string?)null, observacoesAcademicas = (string?)null,
+            profissionalResponsavelId = ficha.GetProperty("profissionalId").GetGuid(),
+        };
+
+        var resposta = await Enviar(cliente, HttpMethod.Put, $"/api/alunos/{id}", semCampo, ficha.GetProperty("versao").GetString());
+
+        Assert.Equal(HttpStatusCode.BadRequest, resposta.StatusCode);
+        var depois = await cliente.GetFromJsonAsync<JsonElement>($"/api/alunos/{id}");
+        Assert.True(depois.GetProperty("matriculaAtiva").GetBoolean());
     }
 
     [Fact]

@@ -57,6 +57,16 @@ public class AjustesTests
     }
 
     [Fact]
+    public async Task Data_futura_e_erro_no_campo()
+    {
+        // RelogioFixo: hoje = 2026-10-02.
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            Criar(new UsuarioAtualFalso(Perfis.CoordenadorNap)).Handle(Comando(new DateOnly(2026, 10, 3)), TestContext.Current.CancellationToken));
+        Assert.Contains("data", ex.Erros.Keys);
+        Assert.Empty(_ajustes.Itens);
+    }
+
+    [Fact]
     public async Task Semana_fechada_rejeita_ajuste()
     {
         var f = FechamentoSemanal.Criar(_profissional, SemanaEncerrada);

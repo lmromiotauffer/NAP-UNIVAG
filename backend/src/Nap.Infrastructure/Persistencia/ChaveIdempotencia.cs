@@ -45,7 +45,6 @@ public sealed class ChavesIdempotencia(NapDbContext db, IRelogio relogio) : ICha
                 return new ReservaIdempotencia(ResultadoReserva.Concluida, recurso);
             // Reserva em andamento há mais de 5 min: o processo que a fez caiu sem concluir nem liberar. Retoma
             // renovando CriadaEm só se ninguém a retomou antes (compara o CriadaEm lido), para um único vencedor.
-            // ponytail: um original só lento (>5 min, vivo) ainda pode concluir junto; lease com dono se isso ocorrer.
             var agora = relogio.Agora;
             if (existente.CriadaEm < agora - ReservaAbandonada
                 && await db.ChavesIdempotencia

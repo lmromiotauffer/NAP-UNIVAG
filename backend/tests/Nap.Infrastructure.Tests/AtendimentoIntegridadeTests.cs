@@ -18,7 +18,7 @@ public class AtendimentoIntegridadeTests(SqlServerFixture fx)
         var prof = await fx.CriarProfissionalAsync();
         var aluno = await RoundTripTests.CriarAlunoAsync(fx, await fx.CriarCursoAsync(), prof);
         var compromisso = Compromisso.Criar(TipoCompromisso.Atendimento, "Atendimento",
-            IntervaloHorario.Criar(agora.AddHours(-2), agora.AddHours(-1)), prof, aluno.Id, null, prof, agora);
+            IntervaloHorario.Criar(agora.AddHours(-2), agora.AddHours(-1)), prof, aluno.Id, null, prof);
         await using (var db = fx.CriarContexto())
         {
             db.Compromissos.Add(compromisso);

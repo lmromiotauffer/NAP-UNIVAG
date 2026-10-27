@@ -92,4 +92,31 @@ describe("RetornoDialog", () => {
     await waitFor(() => expect(aoConcluir).toHaveBeenCalled());
     expect(JSON.parse(String(pedidos[0]?.data))).toEqual({ acao: "Evolucao", data: null, texto: "Segue em atendimento semanal." });
   });
+  it.each([
+    ["InicioAtendimento", "22/09/2026", "Registrar início do atendimento"],
+    ["Alta", "25/09/2026", "Registrar alta"],
+    ["Desistencia", "25/09/2026", "Registrar desistência"],
+  ] as const)("Data_anterior_a_minima_e_recusada_em_%s", async (acao, minima, botao) => {
+    const aoConcluir = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RetornoDialog
+          encaminhamento={{ ...encaminhamento, estado: "EmAtendimento", dataAcolhimento: "2026-09-22", dataPrimeiroAtendimento: "2026-09-25" }}
+          acao={acao}
+          aoFechar={vi.fn()}
+          aoConcluir={aoConcluir}
+        />
+      </QueryClientProvider>,
+    );
+    const user = userEvent.setup();
+    const data = screen.getByLabelText(/^Data/);
+    await user.clear(data);
+    await user.type(data, "2026-09-21");
+    if (acao === "Desistencia") await user.type(screen.getByLabelText(/Justificativa/), "Mudou de cidade.");
+    await user.click(screen.getByRole("button", { name: botao }));
+
+    expect(await screen.findByText(`A data não pode ser anterior a ${minima}.`)).toBeInTheDocument();
+    expect(pedidos).toHaveLength(0);
+    expect(aoConcluir).not.toHaveBeenCalled();
+  });
 });

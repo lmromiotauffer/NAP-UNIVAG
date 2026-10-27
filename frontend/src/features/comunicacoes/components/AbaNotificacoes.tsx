@@ -11,14 +11,12 @@ import { classeMolduraRolavel } from "../../../components/ui/Table";
 import { useToast } from "../../../components/ui/Toast";
 import { cn } from "../../../lib/cn";
 import { formatarDataHora } from "../../../lib/format";
+import { destinoSeguro } from "../../../lib/navegacao";
 import { comParametro, paginaDaUrl } from "../../../lib/queryKeys";
 import type { Notificacao } from "../../../lib/types";
 import { useListaNotificacoes, useMarcarLida, useMarcarTodasLidas } from "../../notificacoes/hooks/useNotificacoes";
 
 const TAMANHO = 20;
-
-/** Só caminhos internos: o link vem da API, mas nunca leva para fora do sistema. */
-const ehCaminhoInterno = (l: string) => l.startsWith("/") && !l.startsWith("//");
 
 /** Aba Notificações de Comunicações (era a página /notificacoes). Filtro e página ficam na URL, ao lado de `aba`. */
 export function AbaNotificacoes() {
@@ -36,7 +34,8 @@ export function AbaNotificacoes() {
   async function abrir(n: Notificacao) {
     // Marcar é melhor esforço: falhar não deve impedir de chegar ao encaminhamento.
     if (!n.lida) await marcarLida.mutateAsync(n.id).catch(() => undefined);
-    if (ehCaminhoInterno(n.link)) void navigate(n.link);
+    // O link vem da API, mas nunca leva para fora do sistema.
+    if (destinoSeguro(n.link, "") === n.link) void navigate(n.link);
   }
 
   async function lerTodas() {
@@ -82,8 +81,8 @@ export function AbaNotificacoes() {
       );
   } else {
     corpo = (
-      // A lista monta depois do skeleton: chega com animate-surgir; a troca de página só esmaece (keepPreviousData).
-      <ul aria-busy={lista.isPlaceholderData} className={cn("animate-surgir m-0 flex list-none flex-col p-0 transition-opacity duration-150 md:min-h-0 md:overflow-y-auto", lista.isPlaceholderData && "opacity-60")}>
+      // A lista substitui o skeleton sem animação de entrada (apagaria e surgiria de novo); a troca de página só esmaece (keepPreviousData).
+      <ul aria-busy={lista.isPlaceholderData} className={cn("m-0 flex list-none flex-col p-0 transition-opacity duration-150 md:min-h-0 md:overflow-y-auto", lista.isPlaceholderData && "opacity-60")}>
         {lista.data.itens.map((n) => (
           <li key={n.id} className="flex flex-wrap items-start justify-between gap-3 border-b border-borda px-4 py-2 last:border-b-0">
             <div className="min-w-0 flex-1 text-corpo">
@@ -94,7 +93,13 @@ export function AbaNotificacoes() {
               <p className="m-0 mt-0.5 break-words text-suave">{n.texto}</p>
               <p className="m-0 mt-0.5 text-xs text-suave">{formatarDataHora(n.criadaEm)}</p>
             </div>
-            <Button variante="secundaria" tamanho="sm" aria-label={`Abrir: ${n.titulo}`} onClick={() => void abrir(n)}>
+            <Button
+              variante="secundaria"
+              tamanho="sm"
+              aria-label={`Abrir: ${n.titulo}`}
+              carregando={marcarLida.isPending && marcarLida.variables === n.id}
+              onClick={() => void abrir(n)}
+            >
               Abrir
             </Button>
           </li>
@@ -106,7 +111,7 @@ export function AbaNotificacoes() {
   return (
     <div className="flex flex-col gap-[18px] md:min-h-0 md:flex-1">
       <div className="flex flex-wrap items-center justify-end gap-3">
-        <label className="flex cursor-pointer items-center gap-2 text-sm pointer-coarse:min-h-11">
+        <label className="flex min-h-[2.375rem] cursor-pointer items-center gap-2 text-denso pointer-coarse:min-h-11">
           <input type="checkbox" checked={soNaoLidas} onChange={(e) => alterar("naoLidas", e.target.checked ? "1" : null)} className="size-4 accent-primaria" />
           Só não lidas
         </label>
@@ -121,8 +126,12 @@ export function AbaNotificacoes() {
             <Paginacao pagina={lista.data.pagina} tamanho={lista.data.tamanho} total={lista.data.total} aoMudar={(p) => alterar("pagina", p > 1 ? String(p) : null)} />
           </div>
         )}
+        {lista.isError && lista.data && (
+          <div className="p-4">
+            <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} className="animate-surgir" />
+          </div>
+        )}
       </section>
-      {lista.isError && lista.data && <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} />}
       <p className="m-0 text-rotulo text-suave">Ler uma notificação não equivale a dar ciência.</p>
     </div>
   );

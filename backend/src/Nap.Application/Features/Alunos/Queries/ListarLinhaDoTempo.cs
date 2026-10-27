@@ -7,10 +7,15 @@ public record ListarLinhaDoTempoQuery(Guid AlunoId, int Pagina = 1, int Tamanho 
 
 public class ListarLinhaDoTempoValidator : AbstractValidator<ListarLinhaDoTempoQuery>
 {
+    public const int LimiteEventos = 2_000;
+
     public ListarLinhaDoTempoValidator()
     {
         RuleFor(x => x.AlunoId).NotEmpty();
-        RuleFor(x => x.Pagina).InclusiveBetween(1, 100_000);
+        // Cada fonte carrega até pagina × tamanho eventos para montar a página em memória: o teto limita essa leitura.
+        RuleFor(x => x.Pagina).InclusiveBetween(1, 100_000)
+            .Must((x, pagina) => (long)pagina * x.Tamanho <= LimiteEventos)
+            .WithMessage($"A linha do tempo lista até {LimiteEventos} eventos.");
         RuleFor(x => x.Tamanho).InclusiveBetween(1, 100);
     }
 }

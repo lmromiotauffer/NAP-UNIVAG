@@ -3,6 +3,7 @@ using Nap.Application.Comum;
 using Nap.Domain.Agenda;
 using Nap.Domain.Atividades;
 using Nap.Domain.Comum.ValueObjects;
+using Nap.Infrastructure.Persistencia.Consultas;
 using Nap.Infrastructure.Persistencia.Repositorios;
 
 namespace Nap.Infrastructure.Tests;
@@ -43,6 +44,11 @@ public class AtividadeRepositoryTests(SqlServerFixture fx)
         Assert.Equal(TipoAtividade.RodaConversa, c.TipoAnterior);
         Assert.Equal("Roda de conversa", c.DescricaoAnterior);
         Assert.Equal(inicio.AddHours(1), c.FimAnterior);
+
+        // A coordenação do curso atual não vê o estado anterior, que era de outro curso.
+        var consultas = new AtividadeQueries(leitura, SqlServerFixture.Relogio());
+        Assert.Single((await consultas.ObterAsync(atividade.Id, null, ct))!.Correcoes);
+        Assert.Empty((await consultas.ObterAsync(atividade.Id, outroCurso, ct))!.Correcoes);
     }
 
     [Fact]
@@ -51,7 +57,7 @@ public class AtividadeRepositoryTests(SqlServerFixture fx)
         var ct = TestContext.Current.CancellationToken;
         var prof = await fx.CriarProfissionalAsync();
         var compromisso = Compromisso.Criar(TipoCompromisso.AtividadeCurso, "Roda",
-            IntervaloHorario.Criar(Agora.AddHours(-2), Agora.AddHours(-1)), prof, null, null, prof, Agora);
+            IntervaloHorario.Criar(Agora.AddHours(-2), Agora.AddHours(-1)), prof, null, null, prof);
         await using (var db = fx.CriarContexto())
         {
             db.Compromissos.Add(compromisso);

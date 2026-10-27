@@ -9,7 +9,8 @@ namespace Nap.Infrastructure.Persistencia.Consultas;
 
 public sealed class UsuarioQueries(NapDbContext db) : IUsuarioQueries
 {
-    private static readonly string[] PerfisProfissionais = [Perfis.ProfissionalNap, Perfis.CoordenadorNap, Perfis.Administrador];
+    // Array: o EF só traduz Contains sobre coleção simples.
+    private static readonly string[] PerfisProfissionais = [.. Perfis.EquipeNap];
 
     public Task<bool> EhProfissionalAtivoAsync(Guid id, CancellationToken ct) =>
         db.Users.AnyAsync(u => u.Id == id && u.Ativo && PerfisProfissionais.Contains(u.Perfil), ct);
@@ -27,17 +28,19 @@ public sealed class UsuarioQueries(NapDbContext db) : IUsuarioQueries
         var de = fuso.InicioDoDia(inicio);
         var ate = fuso.InicioDoDia(fim.AddDays(1));
         var primeiraSemana = ServicoFechamento.SegundaDe(inicio);
+        // O perfil atual só filtra quem não tem fatos: quem saiu da equipe NAP mantém a produção passada.
+        // shortcut: sem histórico de perfil, quem saiu da equipe segue com capacidade pela escala; registrar a data da troca se pesar.
         return await db.Users.AsNoTracking()
-            .Where(u => PerfisProfissionais.Contains(u.Perfil) && (profissionalId != null ? u.Id == profissionalId
-                : u.Ativo
+            .Where(u => profissionalId == null || u.Id == profissionalId)
+            .Where(u => (PerfisProfissionais.Contains(u.Perfil) && (profissionalId != null || u.Ativo))
                     || db.Atendimentos.Any(a => a.ProfissionalId == u.Id && a.Intervalo.Inicio >= de && a.Intervalo.Inicio < ate
                         && (a.Estado == EstadoAtendimento.Realizado || a.Estado == EstadoAtendimento.Ausente))
                     || db.AtividadesCurso.Any(a => a.ProfissionalId == u.Id && a.Intervalo.Inicio >= de && a.Intervalo.Inicio < ate)
                     || db.Compromissos.Any(c => c.ProfissionalId == u.Id && c.RealizacaoInicio >= de && c.RealizacaoInicio < ate)
                     || db.AjustesProducao.Any(a => a.ProfissionalId == u.Id && a.Data >= inicio && a.Data <= fim)
-                    || db.FechamentosSemanais.Any(f => f.ProfissionalId == u.Id && f.Semana >= primeiraSemana && f.Semana <= fim)))
+                    || db.FechamentosSemanais.Any(f => f.ProfissionalId == u.Id && f.Semana >= primeiraSemana && f.Semana <= fim))
             .OrderBy(u => u.NomeCompleto).ThenBy(u => u.Id)
-            .Select(u => new ProfissionalProducaoDto(u.Id, u.NomeCompleto, u.Ativo, u.DesativadoEm, u.Perfil, u.AtivoDesde))
+            .Select(u => new ProfissionalProducaoDto(u.Id, u.NomeCompleto, u.Ativo, u.DesativadoEm, u.Perfil, u.AtivoDesde, u.ReativadoEm))
             .ToListAsync(ct);
     }
 

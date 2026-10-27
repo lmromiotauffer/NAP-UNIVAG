@@ -110,6 +110,13 @@
   /* Chegada curta do conteúdo (página, aba, aviso, conteúdo que substitui skeleton): mesma curva do login, 200 ms.
      `backwards`, não `both`: com o preenchimento final a opacidade fica presa à animação e o elemento não consegue mais transicionar. */
   --animate-surgir: entrada 0.2s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  /* Saída do aviso (Toast): só esmaece, em 150 ms, e fica invisível até desmontar. Serve igual em prefers-reduced-motion. */
+  --animate-sumir: sumir 0.15s ease-in forwards;
+  @keyframes sumir {
+    to {
+      opacity: 0;
+    }
+  }
   @keyframes entrada {
     from {
       opacity: 0;

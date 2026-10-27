@@ -12,8 +12,8 @@ export function AcessoNegado() {
         titulo="Acesso negado"
         descricao="Seu perfil não tem permissão para acessar esta área. Se precisar dela, fale com a coordenação do NAP."
         acao={
-          <Link to="/" className="text-sm font-semibold text-primaria underline-offset-2 hover:underline">
-            Voltar ao painel
+          <Link to="/" className="inline-flex items-center text-sm font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
+            Ir para o painel
           </Link>
         }
       />

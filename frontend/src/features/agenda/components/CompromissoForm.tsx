@@ -4,12 +4,13 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { Dado } from "../../../components/ui/Dado";
 import { Field } from "../../../components/ui/Field";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { Textarea } from "../../../components/ui/Textarea";
 import { normalizarErro, tratarErro } from "../../../lib/api";
-import { formatarData, formatarHora, HORA, instanteCivil } from "../../../lib/format";
+import { formatarData, formatarIntervalo, HORA, instanteCivil, minutosDoDia } from "../../../lib/format";
 import type { Compromisso, ConflitoAgenda } from "../../../lib/types";
 import { BuscaAluno, type AlunoEscolhido } from "../../alunos/components/BuscaAluno";
 import { useProfissionais } from "../../compartilhado/catalogos";
@@ -68,8 +69,7 @@ export const CAMPO_DA_API = { inicio: "data" } as const;
 /** Horários de 15 em 15 minutos, sugeridos no campo (que também aceita digitação). */
 function horarios(de: string, ate: string): string[] {
   const saida: string[] = [];
-  const minutos = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3));
-  for (let m = minutos(de); m <= minutos(ate); m += 15)
+  for (let m = minutosDoDia(de); m <= minutosDoDia(ate); m += 15)
     saida.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
   return saida;
 }
@@ -198,7 +198,7 @@ export function CompromissoForm({
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
       {erroGeral && (
-        <Alert variante="urgente">
+        <Alert variante="urgente" className="animate-surgir">
           {erroGeral}
           <ListaConflitos conflitos={conflitos} />
         </Alert>
@@ -247,21 +247,23 @@ export function CompromissoForm({
             </Select>
           </Field>
         ) : profissionais.isError ? (
-          <Alert variante="urgente">Não foi possível carregar os profissionais. Feche e tente novamente.</Alert>
+          <Alert variante="urgente" className="animate-surgir">Não foi possível carregar os profissionais. Feche e tente novamente.</Alert>
         ) : (
-          <p className="text-sm text-suave">Carregando profissionais…</p>
+          <p role="status" className="text-sm text-suave">
+            Carregando profissionais…
+          </p>
         ))}
       {comGrupo && listaProfissionais && (usuarioId || coordenacao) && (
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-semibold">Participantes</legend>
-          <label className="flex items-center gap-2 text-sm">
+          <legend className="mb-1 text-sm font-medium text-texto">Participantes</legend>
+          <label className="flex cursor-pointer items-center gap-2 text-sm pointer-coarse:min-h-11">
             <input type="checkbox" className="size-4" checked={todaEquipe} onChange={(e) => setTodaEquipe(e.target.checked)} />
             Toda a equipe
           </label>
           {!todaEquipe && (
             <div className="grid gap-1 sm:grid-cols-2">
               {listaProfissionais.map((p) => (
-                <label key={p.id} className="flex items-center gap-2 text-sm">
+                <label key={p.id} className="flex cursor-pointer items-center gap-2 text-sm pointer-coarse:min-h-11">
                   <input
                     type="checkbox"
                     className="size-4"
@@ -350,18 +352,12 @@ export function EditarCompromissoForm({
 
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <dt className="text-xs text-suave">Tipo</dt>
-          <dd>{ROTULO_TIPO[compromisso.tipo]}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-suave">Horário</dt>
-          <dd>
-            {formatarData(compromisso.inicio)} · {formatarHora(compromisso.inicio)}–{formatarHora(compromisso.fim)}
-          </dd>
-        </div>
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
+      <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+        <Dado rotulo="Tipo">{ROTULO_TIPO[compromisso.tipo]}</Dado>
+        <Dado rotulo="Horário">
+          {formatarData(compromisso.inicio)} · {formatarIntervalo(compromisso.inicio, compromisso.fim)}
+        </Dado>
       </dl>
       <Field rotulo="Título" erro={errors.titulo?.message} obrigatorio>
         <Input autoComplete="off" {...register("titulo")} />
@@ -370,9 +366,10 @@ export function EditarCompromissoForm({
         <Textarea {...register("descricao")} />
       </Field>
       <div className="flex flex-wrap justify-end gap-2">
+        {/* "Voltar", como nos outros modos do detalhe: "Cancelar" ao lado de "Cancelar compromisso" confundia. */}
         {aoCancelar && (
           <Button variante="secundaria" onClick={aoCancelar} disabled={isSubmitting}>
-            Cancelar
+            Voltar
           </Button>
         )}
         <Button type="submit" carregando={isSubmitting}>

@@ -1,6 +1,7 @@
 using Nap.Application.Comum;
 using Nap.Application.Features.Producao;
 using Nap.Application.Features.Producao.Queries;
+using Nap.Application.Features.Usuarios;
 using Nap.Application.Tests.Fakes;
 using Nap.Domain.Agenda;
 using Nap.Domain.Comum;
@@ -170,6 +171,34 @@ public class ProducaoTests
     }
 
     [Fact]
+    public async Task Semestre_vai_de_janeiro_a_junho_e_de_julho_a_dezembro()
+    {
+        var primeiro = await Obter(Coordenacao(), TipoPeriodo.Semestre, new DateOnly(2026, 6, 30));
+        var segundo = await Obter(Coordenacao(), TipoPeriodo.Semestre, new DateOnly(2026, 7, 1));
+
+        Assert.Equal((new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30)), (primeiro.Periodo.Inicio, primeiro.Periodo.Fim));
+        Assert.Equal(new DateOnly(2025, 7, 1), primeiro.Anterior.Periodo.Inicio);
+        Assert.Equal((new DateOnly(2026, 7, 1), new DateOnly(2026, 12, 31)), (segundo.Periodo.Inicio, segundo.Periodo.Fim));
+        Assert.Equal(new DateOnly(2026, 1, 1), segundo.Anterior.Periodo.Inicio);
+    }
+
+    [Fact]
+    public async Task Reativado_nao_tem_capacidade_entre_a_desativacao_e_a_reativacao()
+    {
+        // Desativado na segunda 14/09 e reativado na segunda 21/09: só a semana entre as duas fica sem capacidade (escala padrão: 600 min/dia).
+        var volta = Guid.NewGuid();
+        var usuarios = new UsuarioQueriesFalso();
+        usuarios.Inativos.Add(new ProfissionalProducaoDto(volta, "Volta", true, new DateOnly(2026, 9, 14), ReativadoEm: new DateOnly(2026, 9, 21)));
+        var handler = new ObterProducaoHandler(new ObterProducaoValidator(), _consultas, usuarios, Coordenacao(), new RelogioFixo());
+        Task<ProducaoDto> Semana(int dia) =>
+            handler.Handle(new ObterProducaoQuery(TipoPeriodo.Semana, new DateOnly(2026, 9, dia), volta, null), TestContext.Current.CancellationToken);
+
+        Assert.Equal(3000, (await Semana(9)).Tempo!.Capacidade);
+        Assert.Equal(0, (await Semana(16)).Tempo!.Capacidade);
+        Assert.Equal(3000, (await Semana(23)).Tempo!.Capacidade);
+    }
+
+    [Fact]
     public async Task Capacidade_considera_escala_trocada_no_meio_da_semana()
     {
         // Seg e ter na escala A (08–12h = 240 min); de quarta em diante na B (13–15h = 120 min; sexta "sem atendimento" conta).
@@ -206,6 +235,36 @@ public class ProducaoTests
         Assert.Equal((60, 60), (t.ProducaoNaEscala, t.TempoExtra));
         Assert.False(t.Inconsistente);
         Assert.Equal(t.Capacidade, t.ProducaoNaEscala + t.AusenciasNaEscala + t.Ociosidade);
+    }
+
+    [Fact]
+    public async Task Ocorrencia_que_vira_o_dia_desconta_a_escala_do_dia_seguinte_sem_contar_duas_vezes()
+    {
+        // Segunda 20h até terça 8h: a hora 7–8 de terça está na escala, não é tempo extra nem ociosidade.
+        Ocorrencias(Atendimento(_prof, Em(2026, 9, 21, 20), minutos: 12 * 60));
+
+        var p = await Obter(Coordenacao(), TipoPeriodo.Semana, new DateOnly(2026, 9, 21), profissionalId: _prof);
+
+        var t = p.Tempo!;
+        Assert.Equal((60, 11 * 60), (t.ProducaoNaEscala, t.TempoExtra));
+        Assert.Equal(t.Capacidade, t.ProducaoNaEscala + t.AusenciasNaEscala + t.Ociosidade);
+        var atendimentos = Cat(p, CategoriaProducao.AtendimentosRealizados).Total;
+        Assert.Equal((1, 12 * 60), (atendimentos.Ocorrencias, atendimentos.Minutos));
+    }
+
+    [Fact]
+    public async Task Pendente_que_vira_o_dia_ocupa_a_escala_do_dia_seguinte_sem_contar_duas_vezes()
+    {
+        // Segunda 16h30 até terça 7h30: 30 min na escala de segunda e 30 min na de terça.
+        _consultas.Fatos = _consultas.Fatos with
+        {
+            Pendentes = [new IntervaloProfissional(_prof, Em(2026, 9, 21, 16, 30), Em(2026, 9, 22, 7, 30))],
+        };
+
+        var p = await Obter(Coordenacao(), TipoPeriodo.Semana, new DateOnly(2026, 9, 21), profissionalId: _prof);
+
+        Assert.Equal(60, p.Tempo!.PendentesNaEscala);
+        Assert.Equal(1, p.Pendentes);
     }
 
     [Fact]

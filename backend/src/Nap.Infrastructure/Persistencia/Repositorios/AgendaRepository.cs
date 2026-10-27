@@ -6,6 +6,7 @@ using Nap.Domain.Agenda;
 using Nap.Domain.Atendimentos;
 using Nap.Domain.Atividades;
 using Nap.Domain.Comum.ValueObjects;
+using Nap.Infrastructure.Persistencia.Consultas;
 
 namespace Nap.Infrastructure.Persistencia.Repositorios;
 
@@ -59,6 +60,19 @@ public sealed class AgendaRepository(NapDbContext db) : IAgendaRepository
         || await Atendimentos(profissionalId, alunoId, intervalo, ignorarId).AnyAsync(ct)
         || await Atividades(profissionalId, intervalo, ignorarId).AnyAsync(ct);
 
+    public async Task<IReadOnlyList<Guid>> ProfissionaisComConflitoAsync(IReadOnlyCollection<Guid> profissionaisIds, IntervaloHorario intervalo,
+        IReadOnlyCollection<Guid> ignorarIds, CancellationToken ct)
+    {
+        var ids = profissionaisIds.ToList();
+        var ignorar = ignorarIds.ToList();
+        var (inicio, fim) = (intervalo.Inicio, intervalo.Fim);
+        var agendados = await Agendados(db, inicio, fim, ignorar, ids, null).Select(c => c.ProfissionalId).Distinct().ToListAsync(ct);
+        var realizados = await Realizados(db, inicio, fim, ignorar, ids, null).Select(c => c.ProfissionalId).Distinct().ToListAsync(ct);
+        var atendimentos = await Atendimentos(db, inicio, fim, ignorar, ids, null).Select(a => a.ProfissionalId).Distinct().ToListAsync(ct);
+        var atividades = await Atividades(db, inicio, fim, ignorar, ids).Select(a => a.ProfissionalId).Distinct().ToListAsync(ct);
+        return [.. agendados.Union(realizados).Union(atendimentos).Union(atividades)];
+    }
+
     /// <summary>Os mesmos ocupantes de <see cref="ExisteConflitoAsync"/>, só do profissional. O nome do aluno é o que a agenda semanal já exibe à equipe NAP.</summary>
     public async Task<IReadOnlyList<ConflitoAgendaDto>> ListarConflitosAsync(Guid profissionalId, IntervaloHorario intervalo, Guid? ignorarId, CancellationToken ct)
     {
@@ -86,51 +100,68 @@ public sealed class AgendaRepository(NapDbContext db) : IAgendaRepository
         return agendados.Concat(realizados).Concat(atendimentos).Concat(atividades).OrderBy(c => c.Inicio).ThenBy(c => c.Id).ToList();
     }
 
-    // Uma única definição de cada fonte de ocupação, usada pela checagem (Any) e pela lista do 409 (Select):
-    // mudar a regra em uma sem a outra deixaria o 409 com uma lista que não corresponde ao que bloqueou.
-    // Com alunoId nulo, só a agenda do profissional.
-    private IQueryable<Compromisso> Agendados(Guid profissionalId, Guid? alunoId, IntervaloHorario intervalo, Guid? ignorarId)
+    // Uma única definição de cada fonte de ocupação, usada pela checagem (Any), pela lista do 409 (Select) e pela prévia de
+    // conflitos do feriado (FeriadoRepository): mudar a regra em uma sem a outra deixaria o 409 com uma lista que não
+    // corresponde ao que bloqueou. Com alunoId nulo, só a agenda dos profissionais; profissionais nulo = todos.
+    // O início fica limitado por baixo pela duração máxima (IntervaloHorario): o índice (ProfissionalId, Inicio) não varre o histórico.
+    private IQueryable<Compromisso> Agendados(Guid profissionalId, Guid? alunoId, IntervaloHorario intervalo, Guid? ignorarId) =>
+        Agendados(db, intervalo.Inicio, intervalo.Fim, Ignorar(ignorarId), [profissionalId], alunoId);
+
+    private IQueryable<Compromisso> Realizados(Guid profissionalId, Guid? alunoId, IntervaloHorario intervalo, Guid? ignorarId) =>
+        Realizados(db, intervalo.Inicio, intervalo.Fim, Ignorar(ignorarId), [profissionalId], alunoId);
+
+    private IQueryable<Atendimento> Atendimentos(Guid profissionalId, Guid? alunoId, IntervaloHorario intervalo, Guid? ignorarId) =>
+        Atendimentos(db, intervalo.Inicio, intervalo.Fim, Ignorar(ignorarId), [profissionalId], alunoId);
+
+    private IQueryable<AtividadeCurso> Atividades(Guid profissionalId, IntervaloHorario intervalo, Guid? ignorarId) =>
+        Atividades(db, intervalo.Inicio, intervalo.Fim, Ignorar(ignorarId), [profissionalId]);
+
+    private static List<Guid> Ignorar(Guid? ignorarId) => ignorarId is { } id ? [id] : [];
+
+    private static DateTimeOffset Minimo(DateTimeOffset inicio) => inicio.AddHours(-PainelQueries.DuracaoMaximaHoras);
+
+    internal static IQueryable<Compromisso> Agendados(NapDbContext contexto, DateTimeOffset inicio, DateTimeOffset fim, List<Guid> ignorar,
+        List<Guid>? profissionais, Guid? alunoId)
     {
-        var inicio = intervalo.Inicio;
-        var fim = intervalo.Fim;
-        return db.Compromissos.Where(c =>
-            (ignorarId == null || c.Id != ignorarId)
+        var minimo = Minimo(inicio);
+        var q = contexto.Compromissos.Where(c =>
+            !ignorar.Contains(c.Id)
             && c.Estado == EstadoCompromisso.Agendado
             && c.Tipo != TipoCompromisso.Lembrete
-            && c.Intervalo.Inicio < fim && c.Intervalo.Fim > inicio
-            && (c.ProfissionalId == profissionalId || (alunoId != null && c.AlunoId == alunoId)));
+            && c.Intervalo.Inicio >= minimo && c.Intervalo.Inicio < fim && c.Intervalo.Fim > inicio);
+        return profissionais is null ? q : q.Where(c => profissionais.Contains(c.ProfissionalId) || (alunoId != null && c.AlunoId == alunoId));
     }
 
-    private IQueryable<Compromisso> Realizados(Guid profissionalId, Guid? alunoId, IntervaloHorario intervalo, Guid? ignorarId)
+    internal static IQueryable<Compromisso> Realizados(NapDbContext contexto, DateTimeOffset inicio, DateTimeOffset fim, List<Guid> ignorar,
+        List<Guid>? profissionais, Guid? alunoId)
     {
-        var inicio = intervalo.Inicio;
-        var fim = intervalo.Fim;
-        return db.Compromissos.Where(c =>
-            (ignorarId == null || c.Id != ignorarId)
+        var minimo = Minimo(inicio);
+        var q = contexto.Compromissos.Where(c =>
+            !ignorar.Contains(c.Id)
             && c.Estado == EstadoCompromisso.Concluido && c.RealizacaoInicio != null
-            && c.RealizacaoInicio < fim && c.RealizacaoFim > inicio
-            && (c.ProfissionalId == profissionalId || (alunoId != null && c.AlunoId == alunoId)));
+            && c.RealizacaoInicio >= minimo && c.RealizacaoInicio < fim && c.RealizacaoFim > inicio);
+        return profissionais is null ? q : q.Where(c => profissionais.Contains(c.ProfissionalId) || (alunoId != null && c.AlunoId == alunoId));
     }
 
-    private IQueryable<Atendimento> Atendimentos(Guid profissionalId, Guid? alunoId, IntervaloHorario intervalo, Guid? ignorarId)
+    internal static IQueryable<Atendimento> Atendimentos(NapDbContext contexto, DateTimeOffset inicio, DateTimeOffset fim, List<Guid> ignorar,
+        List<Guid>? profissionais, Guid? alunoId)
     {
-        var inicio = intervalo.Inicio;
-        var fim = intervalo.Fim;
-        return db.Atendimentos.Where(a =>
-            (ignorarId == null || a.Id != ignorarId)
+        var minimo = Minimo(inicio);
+        var q = contexto.Atendimentos.Where(a =>
+            !ignorar.Contains(a.Id)
             && (a.Estado == EstadoAtendimento.Realizado || a.Estado == EstadoAtendimento.Ausente)
-            && a.Intervalo.Inicio < fim && a.Intervalo.Fim > inicio
-            && (a.ProfissionalId == profissionalId || (alunoId != null && a.AlunoId == alunoId)));
+            && a.Intervalo.Inicio >= minimo && a.Intervalo.Inicio < fim && a.Intervalo.Fim > inicio);
+        return profissionais is null ? q : q.Where(a => profissionais.Contains(a.ProfissionalId) || (alunoId != null && a.AlunoId == alunoId));
     }
 
-    private IQueryable<AtividadeCurso> Atividades(Guid profissionalId, IntervaloHorario intervalo, Guid? ignorarId)
+    internal static IQueryable<AtividadeCurso> Atividades(NapDbContext contexto, DateTimeOffset inicio, DateTimeOffset fim, List<Guid> ignorar,
+        List<Guid>? profissionais)
     {
-        var inicio = intervalo.Inicio;
-        var fim = intervalo.Fim;
-        return db.AtividadesCurso.Where(a =>
-            (ignorarId == null || a.Id != ignorarId)
-            && a.ProfissionalId == profissionalId
-            && a.Intervalo.Inicio < fim && a.Intervalo.Fim > inicio);
+        var minimo = Minimo(inicio);
+        var q = contexto.AtividadesCurso.Where(a =>
+            !ignorar.Contains(a.Id)
+            && a.Intervalo.Inicio >= minimo && a.Intervalo.Inicio < fim && a.Intervalo.Fim > inicio);
+        return profissionais is null ? q : q.Where(a => profissionais.Contains(a.ProfissionalId));
     }
 
     public async Task<IReadOnlyList<Compromisso>> ListarDoGrupoAsync(Guid grupoId, CancellationToken ct) =>

@@ -15,13 +15,12 @@ public class RemarcarCompromissoValidator : AbstractValidator<RemarcarCompromiss
     {
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.Escopo).IsInEnum();
-        RuleFor(x => x.Fim).GreaterThan(x => x.Inicio).WithMessage("O horário de término deve ser posterior ao de início.")
-            .Must((x, fim) => fim - x.Inicio <= TimeSpan.FromHours(12)).WithMessage("A duração não pode ultrapassar 12 horas.");
+        RuleFor(x => x.Fim).IntervaloValido(x => x.Inicio);
     }
 }
 
 public sealed class RemarcarCompromissoHandler(IValidator<RemarcarCompromissoCommand> validador, IAgendaRepository agenda,
-    IUsuarioAtual usuario, IRelogio relogio, IAuditoria auditoria, IUnidadeDeTrabalho uow, ICacheConsultas cache,
+    IUsuarioAtual usuario, IAuditoria auditoria, IUnidadeDeTrabalho uow, ICacheConsultas cache,
     ServicoEscala escala, ServicoFechamento fechamento)
 {
     public async Task<Guid> Handle(RemarcarCompromissoCommand comando, CancellationToken ct = default)
@@ -39,8 +38,8 @@ public sealed class RemarcarCompromissoHandler(IValidator<RemarcarCompromissoCom
             // Grupo: todas as travas de fechamento (em ordem) antes de todas as de agenda; com uma instância, o fluxo de sempre.
             foreach (var c in instancias.OrderBy(c => c.ProfissionalId.ToString("N"), StringComparer.Ordinal))
             {
-                await fechamento.ExigirSemanaAbertaAsync(c.ProfissionalId, c.Intervalo.Inicio, tct);
-                await fechamento.ExigirSemanaAbertaAsync(c.ProfissionalId, intervalo.Inicio, tct);
+                await fechamento.ExigirSemanaAbertaAsync(c.ProfissionalId, c.Intervalo, tct);
+                await fechamento.ExigirSemanaAbertaAsync(c.ProfissionalId, intervalo, tct);
             }
             if (comando.Escopo == EscopoGrupo.Grupo)
                 await agenda.GarantirGrupoSemConflitoAsync([.. instancias.Select(c => (c.ProfissionalId, (Guid?)c.Id))], intervalo,
@@ -53,7 +52,7 @@ public sealed class RemarcarCompromissoHandler(IValidator<RemarcarCompromissoCom
             var novos = new List<Compromisso>();
             foreach (var c in instancias)
             {
-                novos.Add(c.Remarcar(intervalo, usuario.Id, relogio.Agora));
+                novos.Add(c.Remarcar(intervalo, usuario.Id));
                 agenda.Adicionar(novos[^1]);
                 auditoria.Registrar("agenda.remarcacao", "Compromisso", c.Id);
             }

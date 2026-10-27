@@ -17,6 +17,6 @@ public sealed class ObterMensagemHandler(IValidator<ObterMensagemQuery> validado
     {
         RegrasComunicacao.ExigirAcesso(usuario);
         await validador.ValidarAsync(query, ct);
-        return await consultas.ObterAsync(query.Id, usuario.Id, ct) ?? throw new NotFoundException("Mensagem");
+        return await consultas.ObterAsync(query.Id, usuario, ct) ?? throw new NotFoundException("Mensagem");
     }
 }

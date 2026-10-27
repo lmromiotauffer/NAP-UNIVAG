@@ -11,7 +11,8 @@ import { diaCivil, horaCivil, instanteCivil } from "../../../lib/format";
 import type { AtividadeDetalhe } from "../../../lib/types";
 import { CAMPO_DA_API } from "../../agenda/components/CompromissoForm";
 import { useCorrigirAtividade } from "../hooks/useAtividades";
-import { ehTipoAtividade } from "../rotulos";
+import { entre } from "../../../lib/entre";
+import { TIPOS_ATIVIDADE } from "../rotulos";
 import { CamposAtividade, verificarAtividade } from "./AtividadeForm";
 
 const esquema = z
@@ -63,7 +64,8 @@ export function CorrigirAtividadeDialog({ atividade, aoConcluir, aoCancelar }: {
 
   async function enviar(d: Saida) {
     setErroGeral(null);
-    if (!ehTipoAtividade(d.tipo)) return;
+    const tipo = entre(TIPOS_ATIVIDADE, d.tipo);
+    if (!tipo) return;
     try {
       await corrigir.mutateAsync({
         id: atividade.id,
@@ -72,7 +74,7 @@ export function CorrigirAtividadeDialog({ atividade, aoConcluir, aoCancelar }: {
           inicio: instanteCivil(d.data, d.inicio),
           fim: instanteCivil(d.data, d.fim),
           cursoId: d.cursoId || null,
-          tipo: d.tipo,
+          tipo,
           descricao: d.descricao.trim(),
           justificativa: d.justificativa,
         },
@@ -85,8 +87,9 @@ export function CorrigirAtividadeDialog({ atividade, aoConcluir, aoCancelar }: {
   }
 
   return (
-    <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+    // animate-surgir: o formulário substitui o detalhe dentro do mesmo Modal, como um painel remontado.
+    <form noValidate onSubmit={handleSubmit(enviar)} className="flex animate-surgir flex-col gap-4">
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       <Field rotulo="Justificativa da correção" erro={errors.justificativa?.message} dica="Toda correção é justificada e auditada (de 5 a 500 caracteres)." obrigatorio>
         <Textarea {...register("justificativa")} />
       </Field>

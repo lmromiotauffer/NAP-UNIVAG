@@ -1,3 +1,4 @@
+import { Plus, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../../../components/ui/Button";
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -23,12 +24,15 @@ export function AjustesTab({ inicio, fim, profissionalId }: { inicio: string; fi
   // Paginação no cliente: a lista é limitada pelo período. O ProducaoPage remonta a aba ao mudar filtro, voltando à página 1.
   const [pagina, setPagina] = useState(1);
   const toast = useToast();
-  // Só a lista que substitui o skeleton chega animada; vinda do cache ela monta junto com o painel da aba, que já anima.
-  const [veioDoSkeleton] = useState(consulta.isPending);
+  // A chave da consulta pode mudar sem remontar a aba (mesmo início, fim diferente): a lista anterior esmaece até a resposta chegar.
+  const ocupado = consulta.isPlaceholderData || undefined;
   return (
     <div className="flex flex-col gap-3 md:min-h-0 md:flex-1">
       <div className="flex justify-end">
-        <Button onClick={() => setNovo(true)}>Novo ajuste</Button>
+        <Button onClick={() => setNovo(true)} className="rounded-full">
+          <Plus aria-hidden="true" className="size-4" />
+          Novo ajuste
+        </Button>
       </div>
       {consulta.isPending && (
         <Carregando rotulo="Carregando ajustes">
@@ -38,12 +42,12 @@ export function AjustesTab({ inicio, fim, profissionalId }: { inicio: string; fi
       {consulta.isError && <ErrorState erro={consulta.error} aoTentarNovamente={() => void consulta.refetch()} />}
       {/* Vazio dentro da mesma moldura da lista, como nas listagens da administração. */}
       {consulta.data && consulta.data.length === 0 && (
-        <section aria-label="Ajustes do período" className={cn(classeMolduraRolavel, veioDoSkeleton && "animate-surgir")}>
-          <EmptyState titulo="Nenhum ajuste no período" />
+        <section aria-label="Ajustes do período" aria-busy={ocupado} className={cn(classeMolduraRolavel, "transition-opacity duration-150", ocupado && "opacity-60")}>
+          <EmptyState icone={<SlidersHorizontal />} titulo="Nenhum ajuste no período" />
         </section>
       )}
       {consulta.data && consulta.data.length > 0 && (
-        <section aria-label="Ajustes do período" className={cn(classeMolduraRolavel, veioDoSkeleton && "animate-surgir")}>
+        <section aria-label="Ajustes do período" aria-busy={ocupado} className={cn(classeMolduraRolavel, "transition-opacity duration-150", ocupado && "opacity-60")}>
           <Table caption="Ajustes do período">
             <thead>
               <tr className="border-b border-borda">

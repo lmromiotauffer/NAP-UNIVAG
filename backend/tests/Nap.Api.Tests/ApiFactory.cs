@@ -54,6 +54,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             ["Nap:Arquivos:Diretorio"] = DiretorioArquivos,
             // Todos os clientes do TestServer caem na mesma partição (sem IP): limite alto para a suíte inteira.
             ["Nap:LimiteLogin:Tentativas"] = "100000",
+            ["Nap:LimiteLogin:TentativasAssinatura"] = "100000",
         }));
     }
 

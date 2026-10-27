@@ -2,12 +2,13 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } fr
 import { useParams } from "react-router";
 import { Alert } from "../../components/ui/Alert";
 import { Button } from "../../components/ui/Button";
-import { classeSecao } from "../../components/ui/Card";
+import { classeSecao, classeTituloPagina } from "../../components/ui/Card";
 import { Field } from "../../components/ui/Field";
 import { Input } from "../../components/ui/Input";
 import { LogoUnivag } from "../../components/ui/LogoUnivag";
 import { SecaoTexto as Secao } from "../../components/ui/Secao";
 import { mensagemErro, normalizarErro } from "../../lib/api";
+import { cn } from "../../lib/cn";
 import { formatarDataCivil, formatarDataHora } from "../../lib/format";
 import { CAMPOS_PEDAGOGICOS } from "../peis/rotulos";
 import { assinaturaService, type VersaoParaAssinatura } from "./services/assinaturaService";
@@ -15,7 +16,8 @@ import { assinaturaService, type VersaoParaAssinatura } from "./services/assinat
 type Etapa = "codigo" | "conteudo" | "concluido" | "invalido";
 type Erros = { codigo?: string; nomeCompleto?: string; aceite?: string; geral?: string };
 
-const classeTitulo = "m-0 font-titulo text-[1.5rem] leading-[1.1] font-black tracking-[-0.02em] focus:outline-none";
+// Mesmo h1 das páginas do sistema; sem anel de foco porque o foco aqui é só programático (fora da ordem do Tab).
+const classeTitulo = cn(classeTituloPagina, "focus:outline-none");
 const ACEITE = "Li e concordo com este Plano Educacional Individualizado";
 
 /** Erros da API: 404 (qualquer link inválido) encerra o fluxo; 400 vai para o campo; o resto vira alerta. */
@@ -76,7 +78,7 @@ export function AssinarPeiPage() {
   async function assinar(e: FormEvent) {
     e.preventDefault();
     const faltando: Erros = {
-      ...(nome.trim() ? {} : { nomeCompleto: "Informe seu nome completo." }),
+      ...(nome.trim().length >= 3 ? {} : { nomeCompleto: "Informe seu nome completo." }),
       ...(aceite ? {} : { aceite: "Marque a caixa para concordar com o PEI." }),
     };
     setErros(faltando);
@@ -101,15 +103,21 @@ export function AssinarPeiPage() {
   let corpo: ReactNode;
   if (etapa === "invalido")
     corpo = (
-      <h1 ref={titulo} tabIndex={-1} className={classeTitulo}>
-        Link inválido ou expirado. Peça um novo link ao NAP.
-      </h1>
+      <div className="flex flex-col gap-1.5">
+        <h1 ref={titulo} tabIndex={-1} className={classeTitulo}>
+          Link inválido ou expirado
+        </h1>
+        <p className="m-0 text-suave">Peça um novo link ao NAP.</p>
+      </div>
     );
   else if (etapa === "concluido")
     corpo = (
-      <h1 ref={titulo} tabIndex={-1} className={classeTitulo}>
-        Assinatura registrada. Você já pode fechar esta página.
-      </h1>
+      <div className="flex flex-col gap-1.5">
+        <h1 ref={titulo} tabIndex={-1} className={classeTitulo}>
+          Assinatura registrada
+        </h1>
+        <p className="m-0 text-suave">Você já pode fechar esta página.</p>
+      </div>
     );
   else if (etapa === "conteudo" && versao) {
     const c = versao.conteudo;
@@ -145,6 +153,7 @@ export function AssinarPeiPage() {
                 type="checkbox"
                 checked={aceite}
                 onChange={(e) => setAceite(e.target.checked)}
+                required
                 aria-invalid={erros.aceite ? true : undefined}
                 aria-describedby={erros.aceite ? idErroAceite : undefined}
                 className="mt-0.5 size-4 accent-primaria"
@@ -152,7 +161,7 @@ export function AssinarPeiPage() {
               {ACEITE}
             </label>
             {erros.aceite && (
-              <p id={idErroAceite} role="alert" className="m-0 text-xs text-urgente">
+              <p id={idErroAceite} role="alert" className="animate-surgir m-0 text-xs text-urgente">
                 {erros.aceite}
               </p>
             )}

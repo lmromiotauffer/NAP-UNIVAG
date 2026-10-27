@@ -6,10 +6,17 @@ namespace Nap.Application.Tests.Fakes;
 /// <summary>Aplica <see cref="EscopoDocumentos.PodeVer"/> sobre os documentos do repositório em memória.</summary>
 public sealed class DocumentoQueriesFalso(DocumentoRepositoryEmMemoria repo) : IDocumentoQueries
 {
-    public Task<PagedResult<DocumentoDto>?> ListarAsync(Guid alunoId, EscopoDocumentos e, int pagina, int tamanho, CancellationToken ct) =>
-        throw new NotSupportedException();
+    public Task<PagedResult<DocumentoDto>?> ListarAsync(Guid alunoId, EscopoDocumentos e, int pagina, int tamanho, CancellationToken ct)
+    {
+        var itens = repo.Documentos.Where(d => d.AlunoId == alunoId && e.PodeVer(d)).Select(Dto).ToList();
+        return Task.FromResult<PagedResult<DocumentoDto>?>(new PagedResult<DocumentoDto>(itens, pagina, tamanho, itens.Count));
+    }
 
-    public Task<DocumentoDto?> ObterAsync(Guid id, EscopoDocumentos e, CancellationToken ct) => throw new NotSupportedException();
+    public Task<DocumentoDto?> ObterAsync(Guid id, EscopoDocumentos e, CancellationToken ct) =>
+        Task.FromResult(repo.Documentos.FirstOrDefault(d => d.Id == id && e.PodeVer(d)) is { } d ? Dto(d) : null);
+
+    private static DocumentoDto Dto(Nap.Domain.Documentos.Documento d) => new(d.Id, d.Categoria, d.Descricao, d.NomeArquivo,
+        d.TamanhoBytes, "", d.CriadoEm, d.Visibilidade, null, d.CompartilhadoEm, d.ArquivadoEm is not null, "v1");
 
     public Task<ArquivoDocumento?> ObterArquivoAsync(Guid id, EscopoDocumentos e, CancellationToken ct) =>
         Task.FromResult(repo.Documentos.FirstOrDefault(d => d.Id == id && e.PodeVer(d)) is { } d

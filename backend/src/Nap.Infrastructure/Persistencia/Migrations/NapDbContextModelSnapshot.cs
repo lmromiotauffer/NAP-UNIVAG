@@ -215,6 +215,8 @@ namespace Nap.Infrastructure.Persistencia.Migrations
 
                     b.HasIndex("ProfissionalId");
 
+                    b.HasIndex("RealizacaoInicio");
+
                     b.HasIndex("RealizadoPorId");
 
                     b.ToTable("Compromissos", "nap");
@@ -315,6 +317,9 @@ namespace Nap.Infrastructure.Persistencia.Migrations
 
                     b.Property<DateOnly>("InicioAcompanhamento")
                         .HasColumnType("date");
+
+                    b.Property<bool>("MatriculaAtiva")
+                        .HasColumnType("bit");
 
                     b.Property<string>("NecessidadesEducacionais")
                         .HasColumnType("nvarchar(max)");
@@ -1220,6 +1225,9 @@ namespace Nap.Infrastructure.Persistencia.Migrations
                         .IsRequired()
                         .HasColumnType("char(64)");
 
+                    b.Property<DateTimeOffset?>("InvalidadaEm")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("Metodo")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -1246,7 +1254,8 @@ namespace Nap.Infrastructure.Persistencia.Migrations
                     b.HasIndex("SignatarioId");
 
                     b.HasIndex("VersaoId", "Papel")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[InvalidadaEm] IS NULL");
 
                     b.ToTable("AssinaturasPei", "nap");
                 });
@@ -1299,7 +1308,8 @@ namespace Nap.Infrastructure.Persistencia.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AlunoId");
+                    b.HasIndex("AlunoId")
+                        .IsUnique();
 
                     b.HasIndex("CriadoPorId");
 
@@ -1650,6 +1660,9 @@ namespace Nap.Infrastructure.Persistencia.Migrations
 
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
+
+                    b.Property<DateOnly?>("ReativadoEm")
+                        .HasColumnType("date");
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");

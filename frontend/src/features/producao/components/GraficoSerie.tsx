@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Select } from "../../../components/ui/Select";
 import { cn } from "../../../lib/cn";
-import { formatarInteiro, formatarMesCurto } from "../../../lib/format";
+import { diaDaSemana, formatarInteiro, formatarMesCurto } from "../../../lib/format";
 import type { Producao } from "../../../lib/types";
 import { minutosComSinal } from "./TabelaCategorias";
 
+// Semana: um ponto por dia ("Seg"); mês: semanas recortadas ("1–6"); semestre e ano: meses ("set").
 const rotuloPonto = (tipo: Producao["periodo"]["tipo"], inicio: string, fim: string) =>
-  tipo === "Mes" ? `${Number(inicio.slice(8))}–${Number(fim.slice(8))}` : formatarMesCurto(Number(inicio.slice(5, 7)));
+  tipo === "Semana" ? diaDaSemana(inicio).curto : tipo === "Mes" ? `${Number(inicio.slice(8))}–${Number(fim.slice(8))}` : formatarMesCurto(Number(inicio.slice(5, 7)));
 
 /** Barras em HTML/CSS: a altura é o tempo; cada barra tem nome acessível com ocorrências e tempo (parcial avisado). */
 export function GraficoSerie({ producao, idTitulo }: { producao: Producao; idTitulo?: string }) {
@@ -38,9 +39,10 @@ export function GraficoSerie({ producao, idTitulo }: { producao: Producao; idTit
           </Select>
         </label>
       </div>
-      <ul aria-label={`Tempo por período: ${categoria.rotulo}`} className="m-0 flex h-24 list-none items-end gap-1.5 p-0">
+      {/* Cada barra tem largura mínima para o valor ("22h00") não sobrepor o vizinho: com 12 meses no celular o gráfico rola na horizontal. */}
+      <ul aria-label={`Tempo por período: ${categoria.rotulo}`} className="m-0 flex h-24 list-none items-end gap-1.5 overflow-x-auto p-0">
         {pontos.map((p, i) => (
-          <li key={p.chave} role="img" aria-label={p.nome} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+          <li key={p.chave} role="img" aria-label={p.nome} className="flex h-full min-w-9 flex-1 flex-col items-center justify-end gap-1">
             <span aria-hidden="true" className="text-mini font-bold tabular-nums">{minutosComSinal(p.minutos)}</span>
             {/* Cresce da base só na montagem (chave = início do ponto): trocar a categoria do seletor apenas troca a altura. */}
             <div

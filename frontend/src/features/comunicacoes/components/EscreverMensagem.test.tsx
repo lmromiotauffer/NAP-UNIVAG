@@ -134,6 +134,23 @@ describe("EscreverMensagem", () => {
     expect(servico.enviar).not.toHaveBeenCalled();
   });
 
+  it("Enviar_com_tudo_vazio_marca_o_destinatario_junto_com_os_outros_campos", async () => {
+    const { user } = montar();
+    await within(screen.getByLabelText(/Destinatário/)).findByRole("option", { name: /Carlos Mendes/ });
+    await user.click(screen.getByRole("button", { name: "Enviar" }));
+    expect(await screen.findByText("Selecione o tipo.")).toBeInTheDocument();
+    expect(screen.getByText("Selecione o destinatário.")).toBeInTheDocument();
+    expect(servico.enviar).not.toHaveBeenCalled();
+  });
+
+  it("Falha_na_lista_de_destinatarios_oferece_tentar_novamente", async () => {
+    servico.destinatarios.mockRejectedValueOnce(new Error("falhou"));
+    const { user } = montar();
+    await user.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+    expect(await within(screen.getByLabelText(/Destinatário/)).findByRole("option", { name: /Carlos Mendes/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tentar novamente" })).not.toBeInTheDocument();
+  });
+
   it("Rascunho_aberto_mostra_o_destinatario_quando_a_lista_chega_depois", async () => {
     let entregar: (v: Awaited<ReturnType<typeof comunicacaoService.destinatarios>>) => void = () => undefined;
     servico.destinatarios.mockReturnValue(new Promise((r) => (entregar = r)));

@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { SessaoContexto, type ContextoSessao } from "../../auth/useSessao";
 import { ToastProvider } from "../../components/ui/Toast";
 import { responderApi } from "../../test/apiFalsa";
 import { AtividadesPage } from "./AtividadesPage";
+import { atividadeService } from "./services/atividadeService";
 
 const item = {
   id: "at1",
@@ -25,7 +26,7 @@ const item = {
   versao: "v1",
 };
 
-function montar(perfil: string) {
+function montar(perfil: string, url = "/") {
   responderApi({
     "/atividades": { itens: [item], pagina: 1, tamanho: 20, total: 1 },
     "/cursos": [{ id: "cu1", nome: "Direito", ativo: true, versao: "v" }],
@@ -39,7 +40,7 @@ function montar(perfil: string) {
     trocarSenha: vi.fn(),
     sair: vi.fn(),
   };
-  const router = createMemoryRouter([{ path: "/", element: <AtividadesPage /> }]);
+  const router = createMemoryRouter([{ path: "/", element: <AtividadesPage /> }], { initialEntries: [url] });
   render(
     <QueryClientProvider client={new QueryClient()}>
       <ToastProvider>
@@ -59,6 +60,15 @@ describe("AtividadesPage", () => {
     expect(screen.queryByLabelText("Curso")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Só institucionais")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Profissional")).toBeInTheDocument();
+  });
+
+  it("Data_invalida_da_url_nao_vai_para_a_api", async () => {
+    const listar = vi.spyOn(atividadeService, "listar");
+    montar("ProfissionalNap", "/?inicio=2026-13-99&fim=2026-10-31&tipo=RodaConversa");
+    await waitFor(() => expect(listar).toHaveBeenCalled());
+    // toEqual ignora chaves undefined: o início inválido some; fim e tipo válidos seguem.
+    expect(listar.mock.calls[0]?.[0]).toEqual({ fim: "2026-10-31", tipo: "RodaConversa" });
+    listar.mockRestore();
   });
 
   it("Equipe_nap_ve_nova_atividade_e_os_filtros_de_curso", async () => {

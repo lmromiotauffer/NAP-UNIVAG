@@ -40,7 +40,7 @@ public class AgendaTests
     }
 
     private CriarCompromissoHandler Criar(IUsuarioAtual usuario, params Guid[] ativos) =>
-        new(new CriarCompromissoValidator(), _agenda, _alunos, new UsuarioQueriesFalso(ativos), usuario, new RelogioFixo(), _auditoria, _uow, _cache,
+        new(new CriarCompromissoValidator(), _agenda, _alunos, new UsuarioQueriesFalso(ativos), usuario, _auditoria, _uow, _cache,
             Escala(), Fechamento());
 
     private ServicoEscala Escala() => new(_escalas, _feriados, new RelogioFixo());
@@ -50,7 +50,7 @@ public class AgendaTests
     private ServicoFechamento Fechamento() => new(_fechamentos, new RelogioFixo());
 
     private RemarcarCompromissoHandler Remarcar(IUsuarioAtual usuario) =>
-        new(new RemarcarCompromissoValidator(), _agenda, usuario, new RelogioFixo(), _auditoria, _uow, _cache, Escala(), Fechamento());
+        new(new RemarcarCompromissoValidator(), _agenda, usuario, _auditoria, _uow, _cache, Escala(), Fechamento());
 
     private static CriarCompromissoCommand Comando(TipoCompromisso tipo = TipoCompromisso.ReuniaoEquipe, Guid? profissional = null,
         Guid? aluno = null, DateTimeOffset? inicio = null) =>
@@ -130,6 +130,10 @@ public class AgendaTests
         var h = Criar(Profissional());
         var ex = await Assert.ThrowsAsync<ValidationException>(() => h.Handle(Comando() with { Fim = Inicio.AddHours(-1) }, TestContext.Current.CancellationToken));
         Assert.Contains("fim", ex.Erros.Keys);
+        // Mesma régua do domínio (minutos inteiros): 10:00:10–10:00:50 é duração zero, erro de campo e não 422.
+        var subMinuto = await Assert.ThrowsAsync<ValidationException>(() =>
+            h.Handle(Comando() with { Inicio = Inicio.AddSeconds(10), Fim = Inicio.AddSeconds(50) }, TestContext.Current.CancellationToken));
+        Assert.Equal([ValidacaoIntervalo.MensagemOrdem], subMinuto.Erros["fim"]);
     }
 
     [Theory]
@@ -409,6 +413,16 @@ public class AgendaTests
     private CancelarCompromissoHandler Cancelar(IUsuarioAtual usuario) =>
         new(new CancelarCompromissoValidator(), _agenda, usuario, new RelogioFixo(), _auditoria, _uow, _cache, Fechamento());
 
+    [Fact]
+    public async Task Cancelar_com_motivo_curto_e_erro_de_campo_e_nao_do_dominio()
+    {
+        var usuario = Profissional();
+        var id = await Criar(usuario).Handle(Comando(), TestContext.Current.CancellationToken);
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => Cancelar(usuario)
+            .Handle(new CancelarCompromissoCommand(id, "  ok  ", "v1"), TestContext.Current.CancellationToken));
+        Assert.Contains("motivo", ex.Erros.Keys);
+    }
+
     private static IEnumerable<Guid> OrdemDasTravas(IEnumerable<Guid> ids) => ids.OrderBy(id => id.ToString("N"), StringComparer.Ordinal);
 
     private Compromisso InstanciaDe(Guid profissionalId) =>
@@ -433,7 +447,8 @@ public class AgendaTests
         // Todas as travas de fechamento (compartilhadas), em ordem, antes da trava das agendas.
         Assert.Equal(OrdemDasTravas(participantes), _fechamentos.Bloqueios.Select(b => b.ProfissionalId));
         Assert.All(_fechamentos.Bloqueios, b => Assert.False(b.Exclusivo));
-        Assert.Equal(["transacao", "bloquear", "conflito", "conflito", "conflito", "salvar", "invalidar"], _ordem);
+        // Uma única checagem de conflito para os três participantes.
+        Assert.Equal(["transacao", "bloquear", "conflito", "salvar", "invalidar"], _ordem);
         // Ids e ordem das travas: fechamento de todos (em ordem) e só depois a agenda de todos os participantes.
         var fechamentos = OrdemDasTravas(participantes).Select(id => $"fechamento:prof:{id:N}").ToList();
         Assert.Equal(fechamentos, _travas.Take(3));

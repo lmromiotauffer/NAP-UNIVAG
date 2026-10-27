@@ -3,16 +3,19 @@ using Nap.Application.Comum;
 using Nap.Application.Features.Comunicacoes;
 using Nap.Domain.Comum;
 using Nap.Domain.Comunicacoes;
+using Nap.Domain.Encaminhamentos;
 
 namespace Nap.Infrastructure.Persistencia.Consultas;
 
-/// <summary>Só há o recorte por participante: nenhuma consulta lê mensagem de quem não é autor ou destinatário dela.</summary>
+/// <summary>Recorte por participante (nenhuma consulta lê mensagem de quem não é autor ou destinatário dela) e, fora da Equipe
+/// NAP, pelos vínculos que o perfil e o curso de hoje ainda alcançam.</summary>
 public sealed class ComunicacaoQueries(NapDbContext db) : IComunicacaoQueries
 {
-    public async Task<PagedResult<MensagemListaDto>> ListarAsync(Guid usuarioId, CaixaMensagens caixa, string? busca, Guid? alunoId,
+    public async Task<PagedResult<MensagemListaDto>> ListarAsync(IUsuarioAtual leitor, CaixaMensagens caixa, string? busca, Guid? alunoId, Guid? encaminhamentoId,
         int pagina, int tamanho, CancellationToken ct)
     {
-        var q = db.Mensagens.AsNoTracking();
+        var usuarioId = leitor.Id;
+        var q = Legiveis(db.Mensagens.AsNoTracking(), leitor);
         q = caixa switch
         {
             CaixaMensagens.Entrada => q.Where(m => m.DestinatarioId == usuarioId && m.Estado == EstadoMensagem.Enviada
@@ -32,6 +35,7 @@ public sealed class ComunicacaoQueries(NapDbContext db) : IComunicacaoQueries
             q = q.Where(m => m.Assunto.Contains(termo) || m.Corpo.Contains(termo));
         }
         if (alunoId is { } aluno) q = q.Where(m => m.AlunoId == aluno);
+        if (encaminhamentoId is { } encaminhamento) q = q.Where(m => m.EncaminhamentoId == encaminhamento);
 
         var total = await q.CountAsync(ct);
         var itens = await q
@@ -47,10 +51,11 @@ public sealed class ComunicacaoQueries(NapDbContext db) : IComunicacaoQueries
         return new PagedResult<MensagemListaDto>(itens, pagina, tamanho, total);
     }
 
-    public async Task<MensagemDetalheDto?> ObterAsync(Guid id, Guid usuarioId, CancellationToken ct)
+    public async Task<MensagemDetalheDto?> ObterAsync(Guid id, IUsuarioAtual leitor, CancellationToken ct)
     {
+        var usuarioId = leitor.Id;
         // Mesmo recorte de RegrasComunicacao.PodeVer: rascunho só do autor; enviada dos participantes.
-        var linha = await db.Mensagens.AsNoTracking()
+        var linha = await Legiveis(db.Mensagens.AsNoTracking(), leitor)
             .Where(m => m.Id == id && (m.Estado == EstadoMensagem.Rascunho
                 ? m.AutorId == usuarioId
                 : m.AutorId == usuarioId || m.DestinatarioId == usuarioId))
@@ -75,7 +80,7 @@ public sealed class ComunicacaoQueries(NapDbContext db) : IComunicacaoQueries
             .SingleOrDefaultAsync(ct);
         if (linha is null) return null;
 
-        var fio = await db.Mensagens.AsNoTracking()
+        var fio = await Legiveis(db.Mensagens.AsNoTracking(), leitor)
             .Where(m => m.FioId == linha.FioId && m.Estado == EstadoMensagem.Enviada
                 && (m.AutorId == usuarioId || m.DestinatarioId == usuarioId))
             .OrderBy(m => m.EnviadaEm).ThenBy(m => m.Id)
@@ -86,7 +91,26 @@ public sealed class ComunicacaoQueries(NapDbContext db) : IComunicacaoQueries
         return linha.Dto with { Fio = fio };
     }
 
-    public Task<int> ContarNaoLidasAsync(Guid usuarioId, CancellationToken ct) =>
-        db.Mensagens.CountAsync(m => m.DestinatarioId == usuarioId && m.Estado == EstadoMensagem.Enviada && m.LidaEm == null
-            && m.ArquivadaPeloDestinatarioEm == null, ct);
+    public Task<int> ContarNaoLidasAsync(IUsuarioAtual leitor, CancellationToken ct) =>
+        Legiveis(db.Mensagens, leitor).CountAsync(m => m.DestinatarioId == leitor.Id && m.Estado == EstadoMensagem.Enviada
+            && m.LidaEm == null && m.ArquivadaPeloDestinatarioEm == null, ct);
+
+    /// <summary>
+    /// Espelha <see cref="RegrasComunicacao.AlcancaVinculos"/> com o curso atual do aluno: fora da Equipe NAP, a mensagem
+    /// enviada só é lida enquanto o perfil e o curso de hoje alcançam os vínculos dela. O rascunho é só do autor.
+    /// </summary>
+    private IQueryable<Mensagem> Legiveis(IQueryable<Mensagem> q, IUsuarioAtual leitor)
+    {
+        if (leitor.EhEquipeNap()) return q;
+        if (leitor.Perfil == Perfis.CoordenadorCurso && leitor.CursoId is { } curso)
+            return q.Where(m => m.Estado == EstadoMensagem.Rascunho
+                || (m.CursoId == null && m.AlunoId == null && m.EncaminhamentoId == null)
+                || (m.AlunoId != null ? db.Alunos.Any(a => a.Id == m.AlunoId && a.CursoAtualId == curso) : m.CursoId == curso));
+        if (leitor.Perfil == Perfis.Sip)
+            return q.Where(m => m.Estado == EstadoMensagem.Rascunho
+                || (m.CursoId == null && m.AlunoId == null && m.EncaminhamentoId == null)
+                || db.Encaminhamentos.Any(e => e.Id == m.EncaminhamentoId
+                    && (e.Destino == DestinoEncaminhamento.Sip || e.Destino == DestinoEncaminhamento.ClinicaEscola)));
+        return q.Where(_ => false); // perfil sem recorte reconhecido: falha fechada
+    }
 }

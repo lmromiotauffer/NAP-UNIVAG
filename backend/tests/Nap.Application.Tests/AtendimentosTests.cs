@@ -54,7 +54,7 @@ public class AtendimentosTests
     private Compromisso NovoCompromisso(Guid profissionalId)
     {
         var c = Compromisso.Criar(TipoCompromisso.Atendimento, "Atendimento", IntervaloHorario.Criar(Inicio, Inicio.AddHours(1)),
-            profissionalId, _aluno.Id, null, profissionalId, Inicio.AddDays(-5));
+            profissionalId, _aluno.Id, null, profissionalId);
         _agenda.Adicionar(c);
         return c;
     }
@@ -169,7 +169,7 @@ public class AtendimentosTests
     {
         var usuario = Profissional();
         _agenda.Adicionar(Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião", IntervaloHorario.Criar(Inicio, Inicio.AddHours(1)),
-            usuario.Id, null, null, usuario.Id, Inicio.AddDays(-5)));
+            usuario.Id, null, null, usuario.Id));
         await Assert.ThrowsAsync<ConflictException>(() => Registrar(usuario).Handle(Avulso(), TestContext.Current.CancellationToken));
         Assert.Empty(_repo.Atendimentos);
     }
@@ -182,6 +182,14 @@ public class AtendimentosTests
         Assert.Contains("alunoId", ex.Erros.Keys);
         Assert.Contains("inicio", ex.Erros.Keys);
         Assert.Contains("fim", ex.Erros.Keys);
+        Assert.Contains("justificativaAvulso", ex.Erros.Keys);
+    }
+
+    [Fact]
+    public async Task Avulso_com_justificativa_curta_e_erro_de_campo_e_nao_do_dominio()
+    {
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => Registrar(Profissional()).Handle(
+            Avulso() with { JustificativaAvulso = "n/a" }, TestContext.Current.CancellationToken));
         Assert.Contains("justificativaAvulso", ex.Erros.Keys);
     }
 
@@ -253,7 +261,7 @@ public class AtendimentosTests
         var usuario = Profissional();
         var a = AtendimentoExistente(usuario.Id);
         _agenda.Adicionar(Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião",
-            IntervaloHorario.Criar(Inicio.AddHours(3), Inicio.AddHours(4)), usuario.Id, null, null, usuario.Id, Inicio.AddDays(-5)));
+            IntervaloHorario.Criar(Inicio.AddHours(3), Inicio.AddHours(4)), usuario.Id, null, null, usuario.Id));
         var cmd = Correcao(a.Id, null) with { Inicio = Inicio.AddHours(3), Fim = Inicio.AddHours(4) };
         await Assert.ThrowsAsync<ConflictException>(() => Corrigir(usuario).Handle(cmd, TestContext.Current.CancellationToken));
         Assert.Empty(a.Correcoes);
@@ -314,7 +322,7 @@ public class AtendimentosTests
         var id = Guid.NewGuid();
         var consultas = new AtendimentoQueriesFalso
         {
-            Detalhe = new AtendimentoDetalheDto(id, null, Inicio, Inicio.AddHours(1), _aluno.Id, "Maria", Guid.NewGuid(), "Ana",
+            Detalhe = new AtendimentoDetalheDto(id, null, Inicio, Inicio.AddHours(1), 60, _aluno.Id, "Maria", Guid.NewGuid(), "Ana",
                 TipoAtendimento.Acompanhamento, EstadoAtendimento.Realizado, true, "j", new DadosClinicosDto("d", "obs", null, null), [], "AAAAAAAAB9E="),
         };
         var h = new ObterAtendimentoHandler(new ObterAtendimentoValidator(), consultas, Profissional(), _auditoria, _uow);
@@ -342,7 +350,7 @@ public class AtendimentosTests
         await Corrigir(usuario).Handle(Correcao(a.Id, null) with { Estado = EstadoAtendimento.Cancelado }, TestContext.Current.CancellationToken);
         // Cancelado libera o horário, que é reaproveitado por outro compromisso.
         _agenda.Adicionar(Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião", IntervaloHorario.Criar(Inicio, Inicio.AddHours(1)),
-            usuario.Id, null, null, usuario.Id, Inicio.AddDays(-5)));
+            usuario.Id, null, null, usuario.Id));
         _ordem.Clear();
 
         await Assert.ThrowsAsync<ConflictException>(() => Corrigir(usuario).Handle(Correcao(a.Id, null), TestContext.Current.CancellationToken));
@@ -385,6 +393,10 @@ public class AtendimentosTests
         _feriados.Adicionar(Nap.Domain.Agenda.Feriado.Criar(DateOnly.FromDateTime(Inicio.UtcDateTime), "Ponto facultativo"));
         await Corrigir(usuario).Handle(Correcao(a.Id, null), TestContext.Current.CancellationToken);
         Assert.Single(a.Correcoes);
+        // Só o término muda: o início (já registrado) não passa de novo pela escala.
+        await Corrigir(usuario).Handle(Correcao(a.Id, null) with { Fim = a.Intervalo.Fim.AddMinutes(10) },
+            TestContext.Current.CancellationToken);
+        Assert.Equal(2, a.Correcoes.Count);
 
         var ex = await Assert.ThrowsAsync<DomainException>(() => Corrigir(usuario).Handle(
             Correcao(a.Id, null) with { Inicio = Inicio.AddHours(1), Fim = Inicio.AddHours(2) }, TestContext.Current.CancellationToken));

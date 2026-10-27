@@ -81,11 +81,12 @@ function AlterarCategoriaDialog({ documento, aoFechar, aoConcluir }: { documento
 
 type Dialogo = { tipo: "anexar" } | { tipo: "categoria" | "compartilhar" | "revogar" | "arquivar"; documento: Documento } | null;
 
-/** Aba Documentos da ficha. Ler segue `alunos.consultar` (a API recorta por perfil); escrever é só da Equipe NAP. */
+/** Aba Documentos da ficha. Ler segue `alunos.consultar` (a API recorta por perfil); anexar inclui a coordenação de curso; o resto da escrita é só da Equipe NAP. */
 export function DocumentosDoAluno({ alunoId }: { alunoId: string }) {
   const { usuario } = useSessao();
   const toast = useToast();
   const gerencia = pode(usuario, "documentos.gerenciar");
+  const anexa = pode(usuario, "documentos.anexar");
   const coordenacao = ehCoordenacao(usuario);
   const [pagina, setPagina] = useState(1);
   const [arquivados, setArquivados] = useState(false);
@@ -130,10 +131,11 @@ export function DocumentosDoAluno({ alunoId }: { alunoId: string }) {
   else
     corpo = (
       <>
-        <Table caption="Documentos" aria-busy={lista.isPending || lista.isPlaceholderData}>
+        <Table caption="Documentos" aria-busy={lista.isPending || lista.isPlaceholderData} className={cn(lista.isPlaceholderData && "opacity-60")}>
           <thead>
             <tr className="border-b border-borda">
-              <th scope="col" className={th}>Documento</th>
+              {/* min-w: como na lista de alunos, a 768 px as ações espremiam a descrição. */}
+              <th scope="col" className={cn(th, "min-w-48")}>Documento</th>
               <th scope="col" className={cn(th, soMedio)}>Autor e data</th>
               <th scope="col" className={cn(th, soMedio)}>Visibilidade</th>
               <th scope="col" className={th}>
@@ -231,7 +233,7 @@ export function DocumentosDoAluno({ alunoId }: { alunoId: string }) {
               Mostrar arquivados
             </label>
           )}
-          {gerencia && (
+          {anexa && (
             <Button tamanho="sm" onClick={() => setDialogo({ tipo: "anexar" })}>
               Anexar documento
             </Button>
@@ -239,6 +241,12 @@ export function DocumentosDoAluno({ alunoId }: { alunoId: string }) {
         </div>
       </div>
       {corpo}
+      {/* Refetch falho com dados anteriores na tela (como na lista de alunos): avisa em vez de deixar a lista velha sem sinal. */}
+      {lista.isError && lista.data && (
+        <div className="px-4 pb-4">
+          <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} className="animate-surgir" />
+        </div>
+      )}
       {dialogo?.tipo === "anexar" && <AnexarDocumentoDialog alunoId={alunoId} aoFechar={fechar} aoConcluir={concluir("Documento anexado.")} />}
       {dialogo?.tipo === "categoria" && <AlterarCategoriaDialog documento={dialogo.documento} aoFechar={fechar} aoConcluir={concluir("Categoria alterada.")} />}
       {(dialogo?.tipo === "compartilhar" || dialogo?.tipo === "revogar") && (

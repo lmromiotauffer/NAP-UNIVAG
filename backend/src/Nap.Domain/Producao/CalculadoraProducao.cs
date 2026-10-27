@@ -1,12 +1,16 @@
 namespace Nap.Domain.Producao;
 
-/// <summary>Ocorrência produtiva ou ausência já concluída. <c>Individual</c> alimenta individuais/faltas (o chamador exclui reuniões).</summary>
-public record OcorrenciaProducao(CategoriaProducao Categoria, DateTimeOffset Inicio, DateTimeOffset Fim, bool Individual);
+/// <summary>Ocorrência produtiva ou ausência já concluída. <c>Individual</c> alimenta individuais/faltas (o chamador exclui reuniões).
+/// <c>Continuacao</c>: trecho, no dia seguinte, de uma ocorrência que virou o dia; soma minutos mas não conta de novo.</summary>
+public record OcorrenciaProducao(CategoriaProducao Categoria, DateTimeOffset Inicio, DateTimeOffset Fim, bool Individual,
+    bool Continuacao = false);
 
-/// <summary>Um dia já decorrido de um profissional, com faixas e bloqueios materializados como instantes absolutos.</summary>
+/// <summary>Um dia já decorrido de um profissional, com faixas e bloqueios materializados como instantes absolutos.
+/// <c>PendentesContinuacao</c>: trechos, neste dia, de pendentes que começaram no anterior; ocupam a escala mas não contam de novo.</summary>
 public record DiaProducao(DateOnly Data, IReadOnlyList<(DateTimeOffset Inicio, DateTimeOffset Fim)> Faixas, bool Feriado,
     IReadOnlyList<(DateTimeOffset, DateTimeOffset)> Bloqueios, IReadOnlyList<OcorrenciaProducao> Ocorrencias,
-    IReadOnlyList<(DateTimeOffset, DateTimeOffset)> Pendentes, DateTimeOffset? CorteAgora);
+    IReadOnlyList<(DateTimeOffset, DateTimeOffset)> Pendentes, DateTimeOffset? CorteAgora,
+    IReadOnlyList<(DateTimeOffset, DateTimeOffset)>? PendentesContinuacao = null);
 
 public record ResultadoProducao(IReadOnlyDictionary<CategoriaProducao, (int? Ocorrencias, int Minutos)> Categorias,
     int Capacidade, int ProducaoNaEscala, int AusenciasNaEscala, int PendentesNaEscala, int Ociosidade, int TempoExtra,
@@ -59,19 +63,20 @@ public static class CalculadoraProducao
         {
             var naEscala = Dentro(o.Inicio, o.Fim, faixas);
             var (ocorrencias, minutos) = categorias[o.Categoria];
+            var conta = o.Continuacao ? 0 : 1;
             if (o.Categoria == CategoriaProducao.Ausencias)
             {
                 ausencias += naEscala;
-                categorias[o.Categoria] = (ocorrencias + 1, minutos + Minutos(naEscala));
-                if (o.Individual) faltas++;
+                categorias[o.Categoria] = (ocorrencias + conta, minutos + Minutos(naEscala));
+                if (o.Individual) faltas += conta;
                 continue;
             }
             producao += naEscala;
             extra += (o.Fim - o.Inicio).Ticks - naEscala;
-            categorias[o.Categoria] = (ocorrencias + 1, minutos + Minutos((o.Fim - o.Inicio).Ticks));
-            if (o.Individual && o.Categoria == CategoriaProducao.AtendimentosRealizados) individuais++;
+            categorias[o.Categoria] = (ocorrencias + conta, minutos + Minutos((o.Fim - o.Inicio).Ticks));
+            if (o.Individual && o.Categoria == CategoriaProducao.AtendimentosRealizados) individuais += conta;
         }
-        var pendentes = Minutos(dia.Pendentes.Sum(p => Dentro(p.Item1, p.Item2, faixas)));
+        var pendentes = Minutos(dia.Pendentes.Concat(dia.PendentesContinuacao ?? []).Sum(p => Dentro(p.Item1, p.Item2, faixas)));
 
         var ociosidade = capacidade - Minutos(producao) - Minutos(ausencias) - pendentes;
         categorias[CategoriaProducao.Ociosidade] = (null, ociosidade);

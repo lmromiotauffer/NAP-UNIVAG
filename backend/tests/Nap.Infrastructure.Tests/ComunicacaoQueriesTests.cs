@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Nap.Application.Features.Comunicacoes;
 using Nap.Domain.Comum;
 using Nap.Domain.Comunicacoes;
+using Nap.Domain.Encaminhamentos;
 using Nap.Infrastructure.Persistencia.Consultas;
 
 namespace Nap.Infrastructure.Tests;
@@ -34,13 +35,96 @@ public class ComunicacaoQueriesTests(SqlServerFixture fx)
     private async Task<IReadOnlyList<MensagemListaDto>> CaixaAsync(Guid usuario, CaixaMensagens caixa, string? busca = null)
     {
         await using var db = fx.CriarContexto();
-        return (await new ComunicacaoQueries(db).ListarAsync(usuario, caixa, busca, null, 1, 100, Ct)).Itens;
+        return (await new ComunicacaoQueries(db).ListarAsync(new UsuarioAtualTeste(usuario), caixa, busca, null, null, 1, 100, Ct)).Itens;
     }
 
     private async Task<MensagemDetalheDto?> DetalheAsync(Guid id, Guid usuario)
     {
         await using var db = fx.CriarContexto();
-        return await new ComunicacaoQueries(db).ObterAsync(id, usuario, Ct);
+        return await new ComunicacaoQueries(db).ObterAsync(id, new UsuarioAtualTeste(usuario), Ct);
+    }
+
+    [Fact]
+    public async Task Coordenador_so_le_enquanto_o_aluno_esta_no_curso_dele()
+    {
+        var prof = await UsuarioAsync("Ana");
+        var curso = await fx.CriarCursoAsync();
+        var outroCurso = await fx.CriarCursoAsync();
+        var coordenador = await fx.CriarProfissionalAsync(Perfis.CoordenadorCurso, "Coordenação");
+        var leitor = new UsuarioAtualTeste(coordenador, Perfis.CoordenadorCurso, curso);
+        var aluno = await RoundTripTests.CriarAlunoAsync(fx, curso, prof);
+        var sobreAluno = Mensagem.CriarRascunho(prof, TipoMensagem.Aviso, "Aluno", "Corpo", coordenador, curso, aluno.Id, null, Em(1));
+        sobreAluno.Enviar(Em(1));
+        var semVinculo = Enviada(prof, coordenador, 2);
+        await SalvarAsync(sobreAluno, semVinculo);
+
+        await using (var db = fx.CriarContexto())
+        {
+            var consultas = new ComunicacaoQueries(db);
+            Assert.Equal(2, (await consultas.ListarAsync(leitor, CaixaMensagens.Entrada, null, null, null, 1, 100, Ct)).Total);
+            Assert.NotNull(await consultas.ObterAsync(sobreAluno.Id, leitor, Ct));
+        }
+
+        await using (var db = fx.CriarContexto())
+        {
+            var transferido = (await new Persistencia.Repositorios.AlunoRepository(db).ObterAsync(aluno.Id, Ct))!;
+            transferido.TransferirCurso(outroCurso, new DateOnly(2026, 10, 1), "Transferência", prof, Em(3));
+            await db.SaveChangesAsync(Ct);
+        }
+
+        await using (var db = fx.CriarContexto())
+        {
+            var consultas = new ComunicacaoQueries(db);
+            var entrada = await consultas.ListarAsync(leitor, CaixaMensagens.Entrada, null, null, null, 1, 100, Ct);
+            Assert.Equal([semVinculo.Id], entrada.Itens.Select(m => m.Id));
+            Assert.Null(await consultas.ObterAsync(sobreAluno.Id, leitor, Ct));
+            Assert.Equal(1, await consultas.ContarNaoLidasAsync(leitor, Ct));
+            // A Equipe NAP segue lendo.
+            Assert.NotNull(await consultas.ObterAsync(sobreAluno.Id, new UsuarioAtualTeste(prof), Ct));
+        }
+    }
+
+    [Fact]
+    public async Task Sip_so_le_sem_vinculo_ou_com_encaminhamento_destinado_ao_sip()
+    {
+        var prof = await UsuarioAsync("Ana");
+        var sip = await fx.CriarProfissionalAsync(Perfis.Sip, "SIP");
+        var leitor = new UsuarioAtualTeste(sip, Perfis.Sip);
+        var curso = await fx.CriarCursoAsync();
+        var aluno = await RoundTripTests.CriarAlunoAsync(fx, curso, prof);
+        var hoje = new DateOnly(2026, 10, 2);
+        var paraSip = Encaminhamento.Criar(aluno.Id, curso, prof, Especialidade.Psicologia, DestinoEncaminhamento.Sip, hoje, "motivo",
+            "resumo", null, hoje, Em(0));
+        var paraCoordenacao = Encaminhamento.Criar(aluno.Id, curso, prof, Especialidade.CoordenacaoCurso,
+            DestinoEncaminhamento.CoordenacaoCurso, hoje, "motivo", "resumo", null, hoje, Em(0));
+        paraSip.LimparEventos();
+        paraCoordenacao.LimparEventos();
+        await using (var db = fx.CriarContexto())
+        {
+            db.Encaminhamentos.AddRange(paraSip, paraCoordenacao);
+            await db.SaveChangesAsync(Ct);
+        }
+        Mensagem Com(Guid? cursoId, Guid? alunoId, Guid? encaminhamentoId, int minuto)
+        {
+            var m = Mensagem.CriarRascunho(prof, TipoMensagem.Aviso, "Assunto", "Corpo", sip, cursoId, alunoId, encaminhamentoId, Em(minuto));
+            m.Enviar(Em(minuto));
+            return m;
+        }
+        var semVinculo = Com(null, null, null, 1);
+        var comEncaminhamentoSip = Com(curso, aluno.Id, paraSip.Id, 2);
+        var soAluno = Com(curso, aluno.Id, null, 3);
+        var soCurso = Com(curso, null, null, 4);
+        var outroEncaminhamento = Com(curso, aluno.Id, paraCoordenacao.Id, 5);
+        await SalvarAsync(semVinculo, comEncaminhamentoSip, soAluno, soCurso, outroEncaminhamento);
+
+        await using var leitura = fx.CriarContexto();
+        var consultas = new ComunicacaoQueries(leitura);
+        var entrada = await consultas.ListarAsync(leitor, CaixaMensagens.Entrada, null, null, null, 1, 100, Ct);
+        Assert.Equal([comEncaminhamentoSip.Id, semVinculo.Id], entrada.Itens.Select(m => m.Id));
+        Assert.Equal(2, await consultas.ContarNaoLidasAsync(leitor, Ct));
+        foreach (var oculta in new[] { soAluno, soCurso, outroEncaminhamento })
+            Assert.Null(await consultas.ObterAsync(oculta.Id, leitor, Ct));
+        Assert.NotNull(await consultas.ObterAsync(comEncaminhamentoSip.Id, leitor, Ct));
     }
 
     [Fact]
@@ -178,7 +262,7 @@ public class ComunicacaoQueriesTests(SqlServerFixture fx)
 
         await using var db = fx.CriarContexto();
         var consultas = new ComunicacaoQueries(db);
-        Assert.Equal(2, await consultas.ContarNaoLidasAsync(b, Ct));
-        Assert.Equal(1, await consultas.ContarNaoLidasAsync(a, Ct));
+        Assert.Equal(2, await consultas.ContarNaoLidasAsync(new UsuarioAtualTeste(b), Ct));
+        Assert.Equal(1, await consultas.ContarNaoLidasAsync(new UsuarioAtualTeste(a), Ct));
     }
 }

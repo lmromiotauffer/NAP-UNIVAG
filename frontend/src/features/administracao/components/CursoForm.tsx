@@ -41,7 +41,7 @@ export function CursoForm({ curso, aoConcluir, aoCancelar }: { curso?: Curso; ao
 
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       <Field rotulo="Nome do curso" erro={errors.nome?.message} obrigatorio>
         <Input autoComplete="off" {...register("nome")} />
       </Field>

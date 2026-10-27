@@ -47,13 +47,14 @@ export function AcessoAlunoDialog({ versaoId, aoFechar }: { versaoId: string; ao
           </>
         )}
         {acesso && (
-          <>
+          // Resultado da ação no lugar do botão: chega com o surgir, como o Alert de erro.
+          <div className="flex animate-surgir flex-col gap-4">
             <p className="m-0 text-sm">{INSTRUCAO_ACESSO}</p>
             <div className="flex flex-col gap-1">
               <span className="text-sm font-medium">Link</span>
               <div className="flex items-center gap-2">
                 <code className="min-w-0 flex-1 rounded-md bg-hachura px-2 py-1.5 text-rotulo break-all">{link}</code>
-                <Button tamanho="sm" variante="secundaria" onClick={() => void copiar(link)}>
+                <Button tamanho="sm" variante="secundaria" className="flex-none" onClick={() => void copiar(link)}>
                   Copiar link
                 </Button>
               </div>
@@ -65,7 +66,7 @@ export function AcessoAlunoDialog({ versaoId, aoFechar }: { versaoId: string; ao
               </strong>
             </div>
             <p className="m-0 text-xs text-suave">Válido até {formatarDataHora(acesso.expiraEm)}.</p>
-          </>
+          </div>
         )}
         <div className="flex justify-end">
           <Button variante="secundaria" onClick={fechar}>

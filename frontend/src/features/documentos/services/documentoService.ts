@@ -10,8 +10,9 @@ export type ArquivarBody = Json<paths["/api/documentos/{id}/arquivar"]["post"]["
 
 export const documentoService = {
   listar: (alunoId: string, f: FiltroDocumentos) => api.get<PagedResult<Documento>>(`/alunos/${alunoId}/documentos`, { params: f }).then((r) => r.data),
+  // Sem timeout: 5 MiB numa conexão lenta passam dos 30 s do cliente.
   anexar: (alunoId: string, form: FormData, chave: string) =>
-    api.post<{ id: string }>(`/alunos/${alunoId}/documentos`, form, comChave(chave)).then((r) => r.data),
+    api.post<{ id: string }>(`/alunos/${alunoId}/documentos`, form, { ...comChave(chave), timeout: 0 }).then((r) => r.data),
   // Arquivado só baixa para a coordenação e com incluirArquivados=true.
   baixar: (d: Pick<Documento, "id" | "arquivado">) => baixarArquivo(`/documentos/${d.id}/arquivo${d.arquivado ? "?incluirArquivados=true" : ""}`),
   alterarCategoria: (id: string, body: AlterarCategoriaBody, versao: string) => api.put(`/documentos/${id}/categoria`, body, comVersao(versao)).then(() => undefined),

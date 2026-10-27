@@ -115,7 +115,10 @@ public class EncaminhamentoQueriesTests(SqlServerFixture fx)
         Assert.Equal(4, lista.Total);
         Assert.All(lista.Itens, i => Assert.Equal(c.Aluno, i.AlunoId));
         Assert.All(detalhes, d => Assert.Null(d.MotivoRestrito ?? d.Observacoes));
-        Assert.All(detalhes, d => Assert.Equal("Resumo compartilhável", d.ResumoCompartilhavel));
+        // Resumo só no encaminhamento para a própria coordenação, como na linha do tempo; nos demais, nulo.
+        Assert.Equal([(DestinoEncaminhamento.CoordenacaoCurso, "Resumo compartilhável")],
+            detalhes.Where(d => d.ResumoCompartilhavel != null).Select(d => (d.Destino!.Value, d.ResumoCompartilhavel!)));
+        Assert.Equal(3, detalhes.Count(d => d.ResumoCompartilhavel == null));
         Assert.All(detalhes, d => Assert.False(d.PodeCancelar));
         // Só o destino Coordenação de curso é atualizado pelo coordenador.
         Assert.Equal([DestinoEncaminhamento.CoordenacaoCurso], detalhes.Where(d => d.PodeRegistrarRetorno).Select(d => d.Destino!.Value));

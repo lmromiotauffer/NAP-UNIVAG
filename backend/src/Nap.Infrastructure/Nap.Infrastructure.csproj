@@ -19,6 +19,9 @@
     <EmbeddedResource Include="Pdf\Fontes\*.ttf" LogicalName="Nap.Infrastructure.Pdf.Fontes.%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Nap.Infrastructure.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Nap.Application\Nap.Application.csproj" />
     <ProjectReference Include="..\Nap.Domain\Nap.Domain.csproj" />
   </ItemGroup>

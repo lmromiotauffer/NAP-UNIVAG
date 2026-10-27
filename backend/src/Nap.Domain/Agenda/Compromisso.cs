@@ -33,7 +33,7 @@ public class Compromisso : Entidade
     private Compromisso() { } // ORM
 
     public static Compromisso Criar(TipoCompromisso tipo, string titulo, IntervaloHorario intervalo,
-        Guid profissionalId, Guid? alunoId, string? descricao, Guid criadoPorId, DateTimeOffset agora, Guid? grupoId = null)
+        Guid profissionalId, Guid? alunoId, string? descricao, Guid criadoPorId, Guid? grupoId = null)
     {
         ArgumentNullException.ThrowIfNull(intervalo);
         titulo = (titulo ?? string.Empty).Trim();
@@ -69,17 +69,18 @@ public class Compromisso : Entidade
         Descricao = descricao;
     }
 
-    public Compromisso Remarcar(IntervaloHorario novo, Guid autorId, DateTimeOffset agora)
+    public Compromisso Remarcar(IntervaloHorario novo, Guid autorId)
     {
         ExigirAgendado("remarcado");
-        var remarcado = Criar(Tipo, Titulo, novo, ProfissionalId, AlunoId, Descricao, autorId, agora, GrupoId);
+        var remarcado = Criar(Tipo, Titulo, novo, ProfissionalId, AlunoId, Descricao, autorId, GrupoId);
         remarcado.RemarcadoDeId = Id;
         Estado = EstadoCompromisso.Remarcado;
         RemarcadoParaId = remarcado.Id;
         return remarcado;
     }
 
-    public void Cancelar(string motivo, Guid autorId, DateTimeOffset agora)
+    /// <summary>Autor e instante do cancelamento ficam na auditoria.</summary>
+    public void Cancelar(string motivo)
     {
         ExigirAgendado("cancelado");
         motivo = (motivo ?? string.Empty).Trim();

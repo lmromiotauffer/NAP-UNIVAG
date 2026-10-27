@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Alert } from "../../../components/ui/Alert";
-import { formatarDataCivil } from "../../../lib/format";
+import { formatarDataCivil, formatarInteiro } from "../../../lib/format";
 import type { TempoProducao } from "../../../lib/types";
 import { minutosComSinal } from "./TabelaCategorias";
 
@@ -37,7 +37,7 @@ export function QuadroTempo({ tempo, pendentes, taxaAusencia }: { tempo: TempoPr
       </dl>
       {pendentes != null && pendentes > 0 && (
         <p className="m-0 text-xs text-suave">
-          {pendentes} {pendentes === 1 ? "compromisso aguarda" : "compromissos aguardam"} classificação (registro ou realização) e {pendentes === 1 ? "está" : "estão"} fora da produção.
+          {formatarInteiro(pendentes)} {pendentes === 1 ? "compromisso aguarda" : "compromissos aguardam"} classificação (registro ou realização) e {pendentes === 1 ? "está" : "estão"} fora da produção.
         </p>
       )}
     </div>

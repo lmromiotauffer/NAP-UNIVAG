@@ -13,7 +13,8 @@ import { Modal } from "../../../components/ui/Modal";
 import { Textarea } from "../../../components/ui/Textarea";
 import { useToast } from "../../../components/ui/Toast";
 import { tratarErro } from "../../../lib/api";
-import { formatarData, formatarHora } from "../../../lib/format";
+import { cn } from "../../../lib/cn";
+import { formatarData, formatarHora, formatarIntervalo } from "../../../lib/format";
 import type { AtendimentoAvulsoAgenda, AtividadeAvulsaAgenda, Compromisso } from "../../../lib/types";
 import { RealizacaoDialog } from "../../producao/components/RealizacaoDialog";
 import { useCancelarCompromisso } from "../hooks/useAgenda";
@@ -35,7 +36,7 @@ type Modo = "ver" | "editar" | "remarcar" | "cancelar" | "realizar" | "corrigir"
 const TIPOS_COM_REALIZACAO: Compromisso["tipo"][] = ["ReuniaoEquipe", "ReuniaoCoordenacaoGestao", "ElaboracaoPei", "TarefaAdministrativa", "EncaminhamentoDevolutiva"];
 
 function horario(inicio: string, fim: string): string {
-  return `${formatarData(inicio)}, ${formatarHora(inicio)}–${formatarHora(fim)}`;
+  return `${formatarData(inicio)}, ${formatarIntervalo(inicio, fim)}`;
 }
 
 export function DetalheCompromisso({
@@ -120,7 +121,7 @@ export function DetalheCompromisso({
       titulo={titulo}
       rodape={
         modo === "ver" && agendado && podeAgir ? (
-          <div className="flex flex-wrap justify-end gap-2">
+          <>
             {/* Só depois do término: a API recusa registrar atendimento que ainda não terminou. */}
             {aoRegistrarAtendimento && compromisso.tipo === "Atendimento" && Date.parse(compromisso.fim) <= Date.now() && (
               <Button onClick={() => aoRegistrarAtendimento(compromisso)}>Registrar atendimento</Button>
@@ -159,101 +160,105 @@ export function DetalheCompromisso({
                 {grupo ? "Editar o grupo" : "Editar"}
               </Button>
             )}
-          </div>
+          </>
         ) : modo === "ver" && realizado && podeAgir ? (
-          <div className="flex justify-end">
-            <Button variante="secundaria" onClick={() => setModo("corrigir")}>
-              Corrigir realização
-            </Button>
-          </div>
+          <Button variante="secundaria" onClick={() => setModo("corrigir")}>
+            Corrigir realização
+          </Button>
         ) : undefined
       }
     >
-      <div ref={conteudo} />
-      {modo === "ver" && (
-        <div className="flex flex-col gap-4 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variante={estilo.variante}>{estilo.rotuloEstado}</Badge>
-            <span className="text-suave">{ROTULO_TIPO[compromisso.tipo]}</span>
-            {grupo && <Badge variante="info">Grupo</Badge>}
+      {/* `key`: o painel remonta a cada troca de modo e chega com o surgir padrão. Quando o diálogo monta (abertura e volta do
+          cancelamento, que é outro diálogo) quem anima é o próprio diálogo. */}
+      <div ref={conteudo} key={modo} className={cn(modoAnterior.current !== modo && modoAnterior.current !== "cancelar" && "animate-surgir")}>
+        {modo === "ver" && (
+          <div className="flex flex-col gap-4 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variante={estilo.variante}>{estilo.rotuloEstado}</Badge>
+              <span className="text-suave">{ROTULO_TIPO[compromisso.tipo]}</span>
+              {grupo && <Badge variante="info">Grupo</Badge>}
+            </div>
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Dado rotulo="Horário">{horario(compromisso.inicio, compromisso.fim)}</Dado>
+              <Dado rotulo="Profissional">{compromisso.profissional}</Dado>
+              {grupo && compromisso.participantes && compromisso.participantes.length > 0 && (
+                <Dado rotulo="Participantes">{compromisso.participantes.map((p) => p.nome).join(", ")}</Dado>
+              )}
+              {compromisso.alunoId && (
+                <Dado rotulo="Aluno">
+                  <Link to={`/alunos/${compromisso.alunoId}`} className="inline-flex items-center font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
+                    {compromisso.aluno ?? "Abrir ficha"}
+                  </Link>
+                </Dado>
+              )}
+            </dl>
+            {/* <dl> próprio, fora da grade de duas colunas: o texto corrido usa a largura toda (como no detalhe do atendimento). */}
+            {compromisso.descricao && (
+              <dl>
+                <Dado rotulo="Descrição" classeValor="whitespace-pre-line">
+                  {compromisso.descricao}
+                </Dado>
+              </dl>
+            )}
+            {/* A listagem omite os Remarcados: o original nunca está na semana, então o vínculo é só informativo. */}
+            {compromisso.remarcadoDeId && <Alert variante="info">Remarcado de um compromisso anterior</Alert>}
+            {compromisso.estado === "Concluido" && (
+              <p className="text-suave">
+                {compromisso.estadoAtendimento
+                  ? `Atendimento registrado como ${estilo.rotuloEstado.toLowerCase()}. O horário exibido é o do registro.`
+                  : compromisso.tipo === "AtividadeCurso"
+                    ? "Atividade registrada. O horário exibido é o do registro."
+                    : TIPOS_COM_REALIZACAO.includes(compromisso.tipo)
+                      ? "Realização registrada. O horário exibido é o da realização."
+                      : "Compromisso concluído."}
+              </p>
+            )}
           </div>
-          <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Dado rotulo="Horário">{horario(compromisso.inicio, compromisso.fim)}</Dado>
-            <Dado rotulo="Profissional">{compromisso.profissional}</Dado>
-            {grupo && compromisso.participantes && compromisso.participantes.length > 0 && (
-              <Dado rotulo="Participantes">{compromisso.participantes.map((p) => p.nome).join(", ")}</Dado>
-            )}
-            {compromisso.alunoId && (
-              <Dado rotulo="Aluno">
-                <Link to={`/alunos/${compromisso.alunoId}`} className="inline-flex items-center font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
-                  {compromisso.aluno ?? "Abrir ficha"}
-                </Link>
-              </Dado>
-            )}
-          </dl>
-          {compromisso.descricao && (
-            <Dado rotulo="Descrição">
-              <span className="whitespace-pre-line">{compromisso.descricao}</span>
-            </Dado>
-          )}
-          {/* A listagem omite os Remarcados: o original nunca está na semana, então o vínculo é só informativo. */}
-          {compromisso.remarcadoDeId && <Alert variante="info">Remarcado de um compromisso anterior</Alert>}
-          {compromisso.estado === "Concluido" && (
-            <p className="text-suave">
-              {compromisso.estadoAtendimento
-                ? `Atendimento registrado como ${estilo.rotuloEstado.toLowerCase()}. O horário exibido é o do registro.`
-                : compromisso.tipo === "AtividadeCurso"
-                  ? "Atividade registrada. O horário exibido é o do registro."
-                  : TIPOS_COM_REALIZACAO.includes(compromisso.tipo)
-                    ? "Realização registrada. O horário exibido é o da realização."
-                    : "Compromisso concluído."}
-            </p>
-          )}
-        </div>
-      )}
-      {modo === "editar" && (
-        <EditarCompromissoForm
-          compromisso={compromisso}
-          escopo={escopo}
-          aoCancelar={() => setModo("ver")}
-          aoConcluir={() => {
-            toast.sucesso("Compromisso atualizado.");
-            aoFechar();
-          }}
-        />
-      )}
-      {modo === "realizar" && (
-        <RealizacaoDialog
-          compromisso={compromisso}
-          aoCancelar={() => setModo("ver")}
-          aoConcluir={() => {
-            toast.sucesso("Realização registrada.");
-            aoFechar();
-          }}
-        />
-      )}
-      {modo === "corrigir" && (
-        <RealizacaoDialog
-          compromisso={compromisso}
-          correcao
-          aoCancelar={() => setModo("ver")}
-          aoConcluir={() => {
-            toast.sucesso("Realização corrigida.");
-            aoFechar();
-          }}
-        />
-      )}
-      {modo === "remarcar" && (
-        <RemarcarDialog
-          compromisso={compromisso}
-          escopo={escopo}
-          aoCancelar={() => setModo("ver")}
-          aoConcluir={(id, inicio) => {
-            toast.sucesso(`Compromisso remarcado para ${formatarData(inicio)}, ${formatarHora(inicio)}.`);
-            aoRemarcado(id, inicio);
-          }}
-        />
-      )}
+        )}
+        {modo === "editar" && (
+          <EditarCompromissoForm
+            compromisso={compromisso}
+            escopo={escopo}
+            aoCancelar={() => setModo("ver")}
+            aoConcluir={() => {
+              toast.sucesso("Compromisso atualizado.");
+              aoFechar();
+            }}
+          />
+        )}
+        {modo === "realizar" && (
+          <RealizacaoDialog
+            compromisso={compromisso}
+            aoCancelar={() => setModo("ver")}
+            aoConcluir={() => {
+              toast.sucesso("Realização registrada.");
+              aoFechar();
+            }}
+          />
+        )}
+        {modo === "corrigir" && (
+          <RealizacaoDialog
+            compromisso={compromisso}
+            correcao
+            aoCancelar={() => setModo("ver")}
+            aoConcluir={() => {
+              toast.sucesso("Realização corrigida.");
+              aoFechar();
+            }}
+          />
+        )}
+        {modo === "remarcar" && (
+          <RemarcarDialog
+            compromisso={compromisso}
+            escopo={escopo}
+            aoCancelar={() => setModo("ver")}
+            aoConcluir={(id, inicio) => {
+              toast.sucesso(`Compromisso remarcado para ${formatarData(inicio)}, ${formatarHora(inicio)}.`);
+              aoRemarcado(id, inicio);
+            }}
+          />
+        )}
+      </div>
     </Modal>
   );
 }
@@ -308,11 +313,12 @@ function CancelarCompromisso({
         grupo ? (escopo === "Grupo" ? "O compromisso sai da agenda de todos os participantes" : propria ? "A sua participação sai da agenda e fica registrada como não realizada, se o horário já passou; os demais participantes continuam" : `Só a participação de ${compromisso.profissional} sai da agenda; os demais participantes continuam`) : "O compromisso sai da agenda"
       }; o motivo fica registrado.`}
       confirmar="Confirmar cancelamento"
+      cancelar="Voltar"
       carregando={isSubmitting}
       aoCancelar={aoVoltar}
       aoConfirmar={() => void handleSubmit(enviar)()}
     >
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       <Field rotulo="Motivo do cancelamento" erro={errors.motivo?.message} obrigatorio>
         <Textarea {...register("motivo")} />
       </Field>
@@ -340,7 +346,7 @@ export function DetalheAvulso({ atendimento, aoFechar }: { atendimento: Atendime
           </Dado>
         </dl>
         <p className="text-suave">Registrado sem compromisso na agenda; não pode ser remarcado nem cancelado por aqui.</p>
-        <Link to={`/atendimentos?id=${atendimento.id}`} className="self-start font-semibold text-primaria underline-offset-2 hover:underline">
+        <Link to={`/atendimentos?id=${atendimento.id}`} className="inline-flex items-center self-start font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
           Ver atendimento
         </Link>
       </div>
@@ -361,7 +367,7 @@ export function DetalheAtividadeAvulsa({ atividade, aoFechar }: { atividade: Ati
           <Dado rotulo="Profissional">{atividade.profissional}</Dado>
         </dl>
         <p className="text-suave">Registrada sem compromisso na agenda; não pode ser remarcada nem cancelada por aqui.</p>
-        <Link to={`/atividades?id=${atividade.id}`} className="self-start font-semibold text-primaria underline-offset-2 hover:underline">
+        <Link to={`/atividades?id=${atividade.id}`} className="inline-flex items-center self-start font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
           Ver atividade
         </Link>
       </div>

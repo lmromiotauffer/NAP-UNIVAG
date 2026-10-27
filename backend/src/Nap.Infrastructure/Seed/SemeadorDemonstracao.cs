@@ -124,7 +124,7 @@ public sealed class SemeadorDemonstracao(NapDbContext db, UserManager<UsuarioIde
         {
             var inicio = relogio.Fuso.InicioDoDia(dia).AddHours(hora);
             var compromisso = Compromisso.Criar(TipoCompromisso.Atendimento, $"Atendimento — {aluno.NomeCompleto}",
-                IntervaloHorario.Criar(inicio, inicio.AddMinutes(50)), profissional, aluno.Id, null, profissional, agora);
+                IntervaloHorario.Criar(inicio, inicio.AddMinutes(50)), profissional, aluno.Id, null, profissional);
             db.Compromissos.Add(compromisso);
             if (desfecho is not { } estado || inicio.AddMinutes(50) > agora) return;
             var dados = estado == EstadoAtendimento.Realizado ? new DadosClinicos(Marca, null, null, null) : null;

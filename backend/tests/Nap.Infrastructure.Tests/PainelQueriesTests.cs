@@ -4,6 +4,7 @@ using Nap.Application.Features.Encaminhamentos;
 using Nap.Application.Features.Painel;
 using Nap.Application.Features.Peis;
 using Nap.Domain.Agenda;
+using Nap.Domain.Alunos;
 using Nap.Domain.Atendimentos;
 using Nap.Domain.Comum;
 using Nap.Domain.Comum.ValueObjects;
@@ -26,7 +27,7 @@ public class PainelQueriesTests(SqlServerFixture fx)
         var prof = await fx.CriarProfissionalAsync(nome: "Profissional reunião sem desfecho");
         var agora = Local(9, 30, 12);
         Compromisso Passado(TipoCompromisso tipo, int hora) => Compromisso.Criar(tipo, "Sem desfecho", IntervaloHorario.Criar(Local(9, 22, hora), Local(9, 22, hora + 1)),
-            prof, null, null, prof, agora);
+            prof, null, null, prof);
         var realizada = Passado(TipoCompromisso.ElaboracaoPei, 11);
         realizada.RegistrarRealizacao(IntervaloHorario.Criar(Local(9, 22, 11), Local(9, 22, 12)), prof, agora);
         await using (var db = fx.CriarContexto())
@@ -71,6 +72,108 @@ public class PainelQueriesTests(SqlServerFixture fx)
         Assert.Equal((aluno.Id, 1), (alerta.AlunoId!.Value, alerta.DiasOuOcorrencias!.Value));
         Assert.Contains("nos últimos 30 dias", alerta.Detalhe);
         Assert.DoesNotContain(duasNaJanela, a => a.Tipo == "faltas_recorrentes");
+
+        // Com alta, as faltas antigas não alertam mais.
+        await using (var db = fx.CriarContexto())
+        {
+            var comAlta = await db.Alunos.SingleAsync(a => a.Id == aluno.Id, ct);
+            comAlta.AlterarSituacao(SituacaoAluno.Alta, "Concluiu o acompanhamento", prof, agora);
+            await db.SaveChangesAsync(ct);
+        }
+        await using var depois = fx.CriarContexto();
+        var aposAlta = await new PainelQueries(depois, SqlServerFixture.Relogio())
+            .ObterAlertasAsync(hoje, prof, null, SqlServerFixture.AlertasPadrao with { FaltasConsecutivas = 10, FaltasJanela = 1 }, ct);
+        Assert.DoesNotContain(aposAlta, a => a.Tipo == "faltas_recorrentes");
+    }
+
+    [Fact]
+    public async Task Alertas_de_faltas_param_no_teto_com_um_resumo()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var prof = await fx.CriarProfissionalAsync(nome: "Profissional com muitas faltas");
+        var curso = await fx.CriarCursoAsync("Curso com muitas faltas");
+        var agora = Local(12, 1, 12);
+        await using (var db = fx.CriarContexto())
+        {
+            for (var i = 0; i < 52; i++)
+            {
+                var aluno = Aluno.Criar($"Aluno faltoso {i:00}", Matricula.Criar(Guid.NewGuid().ToString("N")[..20]), curso, 3,
+                    new DateOnly(2026, 3, 1), prof, null, null, prof, agora);
+                db.Add(aluno);
+                db.Add(Atendimento.RegistrarAvulso(aluno.Id, prof, IntervaloHorario.Criar(Local(9, 20, 10), Local(9, 20, 11)),
+                    TipoAtendimento.Acompanhamento, EstadoAtendimento.Ausente, null, "Justificativa avulso", prof, agora));
+            }
+            await db.SaveChangesAsync(ct);
+        }
+
+        await using var leitura = fx.CriarContexto();
+        var alertas = await new PainelQueries(leitura, SqlServerFixture.Relogio()).ObterAlertasAsync(new DateOnly(2026, 10, 1), prof, null,
+            SqlServerFixture.AlertasPadrao with { FaltasConsecutivas = 10, FaltasJanela = 1 }, ct);
+
+        var faltas = alertas.Where(a => a.Tipo == "faltas_recorrentes").ToList();
+        Assert.Equal(51, faltas.Count);
+        Assert.Equal(50, faltas.Count(a => a.AlunoId is not null));
+        var resumo = Assert.Single(faltas, a => a.AlunoId is null);
+        Assert.Equal(2, resumo.DiasOuOcorrencias);
+    }
+
+    [Fact]
+    public async Task Painel_reparte_minutos_que_viram_a_semana_e_o_mes_como_a_producao()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var prof = await fx.CriarProfissionalAsync(nome: "Profissional da virada");
+        var curso = await fx.CriarCursoAsync("Curso da virada");
+        var aluno = await RoundTripTests.CriarAlunoAsync(fx, curso, prof, "Aluno da virada");
+        var agora = Local(12, 1, 12);
+        Atendimento Realizado(DateTimeOffset inicio) => Atendimento.RegistrarAvulso(aluno.Id, prof,
+            IntervaloHorario.Criar(inicio, inicio.AddHours(2)), TipoAtendimento.Acompanhamento, EstadoAtendimento.Realizado,
+            new DadosClinicos("Demanda", null, null, null), "Justificativa avulso", prof, agora);
+
+        await using (var db = fx.CriarContexto())
+        {
+            // Domingo 27/09 23h → segunda 28/09 1h; quarta 30/09 23h → quinta 01/10 1h.
+            db.AddRange(Realizado(Local(9, 27, 23)), Realizado(Local(9, 30, 23)));
+            await db.SaveChangesAsync(ct);
+        }
+
+        await using var leitura = fx.CriarContexto();
+        var painel = new PainelQueries(leitura, SqlServerFixture.Relogio());
+        var semana = await painel.ObterSemanaAsync(new DateOnly(2026, 9, 28), new DateOnly(2026, 10, 2), prof, null, ct);
+        var serie = await painel.ObterSerieMensalAsync(new DateOnly(2026, 9, 1), new DateOnly(2026, 10, 1), prof, null, ct);
+
+        // A semana conta só o de quarta (início nela), mas soma a hora de segunda do de domingo.
+        Assert.Equal((1, 60 + 120), (semana.Realizados, semana.Minutos));
+        // Setembro: 120 do de domingo + 60 do de quarta; outubro só soma a hora que virou o mês.
+        Assert.Equal([new SerieMensalDto(2026, 9, 2, 180, false), new SerieMensalDto(2026, 10, 0, 60, false)], serie);
+    }
+
+    [Fact]
+    public async Task Painel_por_profissional_fecha_com_o_total_da_semana_na_virada_do_dia()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var prof = await fx.CriarProfissionalAsync(nome: "Profissional da virada por profissional");
+        var curso = await fx.CriarCursoAsync("Curso da virada por profissional");
+        var aluno = await RoundTripTests.CriarAlunoAsync(fx, curso, prof, "Aluno da virada por profissional");
+        var agora = Local(12, 1, 12);
+        Atendimento Realizado(DateTimeOffset inicio) => Atendimento.RegistrarAvulso(aluno.Id, prof,
+            IntervaloHorario.Criar(inicio, inicio.AddHours(2)), TipoAtendimento.Acompanhamento, EstadoAtendimento.Realizado,
+            new DadosClinicos("Demanda", null, null, null), "Justificativa avulso", prof, agora);
+
+        await using (var db = fx.CriarContexto())
+        {
+            // Domingo 27/09 23h → segunda 28/09 1h (só a hora de segunda é da semana); quarta 30/09 23h → quinta 01/10 1h.
+            db.AddRange(Realizado(Local(9, 27, 23)), Realizado(Local(9, 30, 23)));
+            await db.SaveChangesAsync(ct);
+        }
+
+        await using var leitura = fx.CriarContexto();
+        var painel = new PainelQueries(leitura, SqlServerFixture.Relogio());
+        var semana = await painel.ObterSemanaAsync(new DateOnly(2026, 9, 28), new DateOnly(2026, 10, 2), prof, null, ct);
+        var porProfissional = (await painel.ObterPorProfissionalAsync(new DateOnly(2026, 9, 28), new DateOnly(2026, 10, 2), null, ct))
+            .Single(p => p.Id == prof);
+
+        Assert.Equal((1, 180), (semana.Realizados, semana.Minutos));
+        Assert.Equal((semana.Realizados, semana.Faltas, semana.Minutos), (porProfissional.Realizados, porProfissional.Faltas, porProfissional.Minutos));
     }
 
     [Fact]
@@ -98,7 +201,7 @@ public class PainelQueriesTests(SqlServerFixture fx)
                 Avulso(EstadoAtendimento.Realizado, TipoAtendimento.Acompanhamento, Local(8, 31, 22), 60),
                 Avulso(EstadoAtendimento.Realizado, TipoAtendimento.Acompanhamento, Local(11, 10, 10), 60),
                 Compromisso.Criar(TipoCompromisso.Atendimento, "Sem desfecho", IntervaloHorario.Criar(Local(9, 25, 8), Local(9, 25, 9)),
-                    prof, aluno.Id, null, prof, agora));
+                    prof, aluno.Id, null, prof));
             await db.SaveChangesAsync(ct);
         }
 

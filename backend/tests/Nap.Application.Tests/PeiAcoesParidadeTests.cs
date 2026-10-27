@@ -19,7 +19,7 @@ public class PeiAcoesParidadeTests
     {
         v.EnviarParaRevisao(t);
         var hash = CalculadoraHashPei.Calcular(v.Conteudo);
-        v.AprovarRevisao(coord, hash, t);
+        v.AprovarRevisao(coord, t);
         v.RegistrarAssinatura(PapelAssinatura.Profissional, prof, "P", hash, "e", t);
         v.RegistrarAssinatura(PapelAssinatura.Aluno, null, "A", hash, "e", t);
         if (!soAte) pei.Publicar(v, coord, Curso, t);
@@ -36,7 +36,7 @@ public class PeiAcoesParidadeTests
             case EstadoVersaoPei.EmRevisao: v.EnviarParaRevisao(Agora); break;
             case EstadoVersaoPei.AguardandoAssinaturas:
                 v.EnviarParaRevisao(Agora);
-                v.AprovarRevisao(coord, hash, Agora);
+                v.AprovarRevisao(coord, Agora);
                 if (profAssinou) v.RegistrarAssinatura(PapelAssinatura.Profissional, prof, "P", hash, "e", Agora);
                 break;
             case EstadoVersaoPei.Assinada: Publicar(pei, v, prof, coord, Agora, soAte: true); break;
@@ -73,13 +73,13 @@ public class PeiAcoesParidadeTests
         var situacao = new AutorizacaoPei.SituacaoVersao(pei.ProfissionalResponsavelId, v.CursoPublicacaoId, v.Estado,
             v.Conteudo.TemConteudoPedagogico, v.Assinaturas.Any(a => a.Papel == PapelAssinatura.Profissional),
             v.Assinaturas.Any(a => a.Papel == PapelAssinatura.Aluno), Pei.EhMaisRecente(v.Numero, pei.Versoes.Max(x => x.Numero)),
-            pei.VersaoAberta is not null, false);
+            pei.ImpedeNovaVersao, false);
         var acoes = AutorizacaoPei.Acoes(usuario, situacao);
         var hash = CalculadoraHashPei.Calcular(v.Conteudo);
 
         Assert.Equal(Funciona(() => Novo().Versao.AtualizarConteudo(Conteudo(), Agora)), acoes.PodeEditar);
         Assert.Equal(Funciona(() => Novo().Versao.EnviarParaRevisao(Agora)), acoes.PodeEnviarRevisao);
-        Assert.Equal(Funciona(() => Novo().Versao.AprovarRevisao(coord, hash, Agora)), acoes.PodeAprovar);
+        Assert.Equal(Funciona(() => Novo().Versao.AprovarRevisao(coord, Agora)), acoes.PodeAprovar);
         Assert.Equal(Funciona(() => Novo().Versao.Devolver("Ajustar o texto", Agora)), acoes.PodeDevolver);
         Assert.Equal(Funciona(() => Novo().Versao.RegistrarAssinatura(PapelAssinatura.Profissional, usuario.Id, "P", hash, "e", Agora)),
             acoes.PodeAssinarComoProfissional);

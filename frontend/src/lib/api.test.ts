@@ -95,6 +95,22 @@ describe("renovação de sessão", () => {
     expect(chamadas.find((c) => c.url === "/b")?.auth).toBe("Bearer novo");
   });
 
+  it("refresh_que_traz_outro_usuario_nao_repete_o_pedido", async () => {
+    let dono = "u2";
+    const chamadas = instalar((c) => {
+      if (c.url === "/auth/refresh") return { status: 200, data: { ...sessao, usuario: { id: dono } } };
+      return c.headers.get("Authorization") === "Bearer novo" ? { status: 200, data: "ok" } : { status: 401 };
+    });
+    definirToken("velho", "u1");
+    await expect(api.post("/a", {})).rejects.toMatchObject({ response: { status: 401 } });
+    expect(chamadas.filter((c) => c.url === "/a")).toHaveLength(1);
+
+    dono = "u1";
+    definirToken("velho", "u1");
+    await api.post("/b", {});
+    expect(chamadas.filter((c) => c.url === "/b").map((c) => c.auth)).toEqual(["Bearer velho", "Bearer novo"]);
+  });
+
   it("auth_senha_vencida_renova_e_repete_mas_login_nao_renova", async () => {
     const chamadas = instalar((c) => {
       if (c.url === "/auth/refresh") return { status: 200, data: sessao };

@@ -96,6 +96,14 @@ describe("GradeSemanal", () => {
     expect(parseFloat(bloco.style.top) + parseFloat(bloco.style.height)).toBeCloseTo(100);
   });
 
+  it("escala_que_abre_as_07h30_rotula_so_horas_cheias", () => {
+    montar([], undefined, { ...escala, dias: escala.dias.map((d) => (d.inicio ? { ...d, inicio: "07:30:00" } : d)) });
+    expect(screen.queryByText("7.5h")).not.toBeInTheDocument();
+    expect(screen.getByText("08h")).toBeInTheDocument();
+    expect(screen.getByText("16h")).toBeInTheDocument();
+    expect(screen.queryByText("07h")).not.toBeInTheDocument();
+  });
+
   it("sabado_sem_faixa_aparece_quando_ha_item_nesse_dia", () => {
     expect(screen.queryByRole("group", { name: /^Sábado/ })).not.toBeInTheDocument();
     montar([compromisso("c1", "2026-10-03T09:00:00-04:00", "2026-10-03T10:00:00-04:00", { aluno: "Sabado Aluno" })], [{ id: "p1", nome: "Ana Souza" }]);

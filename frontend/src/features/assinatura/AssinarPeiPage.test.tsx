@@ -88,7 +88,8 @@ describe("AssinarPeiPage", () => {
     responder(() => invalido);
     const u = montar();
     await abrirComCodigo(u);
-    expect(await screen.findByRole("heading", { name: "Link inválido ou expirado. Peça um novo link ao NAP." })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Link inválido ou expirado" })).toBeInTheDocument();
+    expect(screen.getByText("Peça um novo link ao NAP.")).toBeInTheDocument();
     expect(screen.queryByLabelText("Digite o código de 6 dígitos")).not.toBeInTheDocument();
   });
 
@@ -116,7 +117,7 @@ describe("AssinarPeiPage", () => {
     await u.click(screen.getByLabelText("Li e concordo com este Plano Educacional Individualizado"));
     await u.click(screen.getByRole("button", { name: "Assinar" }));
 
-    expect(await screen.findByRole("heading", { name: "Assinatura registrada. Você já pode fechar esta página." })).toHaveFocus();
+    expect(await screen.findByRole("heading", { name: "Assinatura registrada" })).toHaveFocus();
     expect(JSON.parse(String(pedidos[1]?.data))).toEqual({ token: "tok-secreto", codigo: "123456", nomeCompleto: "Maria Souza", aceite: true });
     expect(pedidos[1]?.headers.get("Authorization")).toBeUndefined();
     expect(screen.queryByText(/Maria Souza/)).not.toBeInTheDocument();

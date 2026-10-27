@@ -55,7 +55,7 @@ describe("FeriadosTab", () => {
     const conflitos = within(await screen.findByRole("dialog", { name: "Feriado cadastrado com conflitos" }));
     expect(conflitos.getByText(/Nada foi apagado\. Resolva cada compromisso na agenda\./)).toBeInTheDocument();
     expect(conflitos.getByText("Atendimento: Letícia Ramos")).toBeInTheDocument();
-    expect(conflitos.getByRole("link", { name: /Abrir a semana na agenda/ })).toHaveAttribute("href", "/agenda?semana=2026-11-02&profissional=p1");
+    expect(conflitos.getByRole("link", { name: /Ver na agenda/ })).toHaveAttribute("href", "/agenda?semana=2026-11-02&profissional=p1");
   });
 
   it("Feriado_sem_conflitos_so_avisa", async () => {

@@ -46,11 +46,11 @@ export function BuscaAluno({
       <div className="flex flex-col gap-1">
         <span className="text-sm font-medium text-texto">Aluno</span>
         <div className="flex items-center justify-between gap-2 rounded-md border border-borda bg-realce px-3 py-2 text-sm">
-          <span>
+          <span className="min-w-0 break-words">
             <span className="font-semibold">{aluno.nome}</span>
             {aluno.matricula && <span className="text-suave"> · {aluno.matricula}</span>}
           </span>
-          <Button tamanho="sm" variante="fantasma" onClick={() => aoEscolher(null)}>
+          <Button tamanho="sm" variante="fantasma" className="flex-none" onClick={() => aoEscolher(null)}>
             Trocar aluno
           </Button>
         </div>
@@ -73,10 +73,10 @@ export function BuscaAluno({
               <button
                 type="button"
                 onClick={() => aoEscolher({ id: a.id, nome: a.nome, matricula: a.matricula })}
-                className="flex w-full justify-between gap-2 px-3 py-2 text-left text-sm transition-colors duration-150 hover:bg-realce focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primaria"
+                className="flex w-full cursor-pointer justify-between gap-2 px-3 py-2 text-left text-sm transition-colors duration-150 pointer-coarse:min-h-11 hover:bg-realce focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primaria"
               >
-                <span className="font-medium">{a.nome}</span>
-                <span className="text-suave tabular-nums">{a.matricula}</span>
+                <span className="min-w-0 font-medium break-words">{a.nome}</span>
+                <span className="flex-none text-suave tabular-nums">{a.matricula}</span>
               </button>
             </li>
           ))}

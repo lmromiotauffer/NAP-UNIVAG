@@ -98,7 +98,7 @@ public class AlunoTests
     public void Atualizar_dados_invalido_nao_altera_nada()
     {
         var a = NovoAluno(semestre: 3);
-        Assert.Throws<DomainException>(() => a.AtualizarDados("Novo Nome", 99, "x", "y", Guid.CreateVersion7()));
+        Assert.Throws<DomainException>(() => a.AtualizarDados("Novo Nome", 99, "x", "y", Guid.CreateVersion7(), true));
         Assert.Equal("Maria da Silva", a.NomeCompleto);
         Assert.Equal(3, a.Semestre);
         Assert.Equal("Necessidade", a.NecessidadesEducacionais);

@@ -51,7 +51,7 @@ public class AlunosController : ControllerBase
         CancellationToken ct)
     {
         await handler.Handle(new AtualizarAlunoCommand(id, request.NomeCompleto, request.Semestre, request.NecessidadesEducacionais,
-            request.ObservacoesAcademicas, request.ProfissionalResponsavelId, HttpContext.VersaoIfMatch()), ct);
+            request.ObservacoesAcademicas, request.ProfissionalResponsavelId, request.MatriculaAtiva, HttpContext.VersaoIfMatch()), ct);
         return NoContent();
     }
 

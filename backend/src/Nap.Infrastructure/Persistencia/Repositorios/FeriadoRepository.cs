@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Nap.Application.Comum;
 using Nap.Application.Features.Agenda;
 using Nap.Domain.Agenda;
-using Nap.Domain.Atendimentos;
 
 namespace Nap.Infrastructure.Persistencia.Repositorios;
 
@@ -21,22 +20,31 @@ public sealed class FeriadoRepository(NapDbContext db, IRelogio relogio) : IFeri
     {
         var inicio = relogio.Fuso.InicioDoDia(data);
         var fim = relogio.Fuso.InicioDoDia(data.AddDays(1));
-        var compromissos = await db.Compromissos.AsNoTracking()
-            .Where(c => c.Estado == EstadoCompromisso.Agendado && c.Tipo != TipoCompromisso.Lembrete
-                && c.Intervalo.Inicio < fim && c.Intervalo.Fim > inicio)
+        // As mesmas quatro fontes de ocupação do conflito de agenda (AgendaRepository), de todos os profissionais.
+        var compromissos = await AgendaRepository.Agendados(db, inicio, fim, [], null, null).AsNoTracking()
             .Select(c => new ConflitoFeriadoDto(c.Id, "Compromisso", c.Titulo, c.ProfissionalId,
                 db.Users.Where(u => u.Id == c.ProfissionalId).Select(u => u.NomeCompleto).FirstOrDefault() ?? "",
                 c.Intervalo.Inicio, c.Intervalo.Fim))
             .ToListAsync(ct);
         // Sem dados clínicos: só o fato de haver atendimento registrado no horário.
-        var atendimentos = await db.Atendimentos.AsNoTracking()
-            .Where(a => (a.Estado == EstadoAtendimento.Realizado || a.Estado == EstadoAtendimento.Ausente)
-                && a.Intervalo.Inicio < fim && a.Intervalo.Fim > inicio)
+        var atendimentos = await AgendaRepository.Atendimentos(db, inicio, fim, [], null, null).AsNoTracking()
             .Select(a => new ConflitoFeriadoDto(a.Id, "Atendimento", "Atendimento", a.ProfissionalId,
                 db.Users.Where(u => u.Id == a.ProfissionalId).Select(u => u.NomeCompleto).FirstOrDefault() ?? "",
                 a.Intervalo.Inicio, a.Intervalo.Fim))
             .ToListAsync(ct);
-        return compromissos.Concat(atendimentos).OrderBy(c => c.Inicio).ThenBy(c => c.Id).ToList();
+        // Realizações e atividades também contam na produção do dia: o feriado as transforma em tempo extra.
+        var realizacoes = await AgendaRepository.Realizados(db, inicio, fim, [], null, null).AsNoTracking()
+            .Select(c => new ConflitoFeriadoDto(c.Id, "Realização", c.Titulo, c.ProfissionalId,
+                db.Users.Where(u => u.Id == c.ProfissionalId).Select(u => u.NomeCompleto).FirstOrDefault() ?? "",
+                c.RealizacaoInicio!.Value, c.RealizacaoFim!.Value))
+            .ToListAsync(ct);
+        var atividades = await AgendaRepository.Atividades(db, inicio, fim, [], null).AsNoTracking()
+            .Select(a => new ConflitoFeriadoDto(a.Id, "Atividade", "Atividade", a.ProfissionalId,
+                db.Users.Where(u => u.Id == a.ProfissionalId).Select(u => u.NomeCompleto).FirstOrDefault() ?? "",
+                a.Intervalo.Inicio, a.Intervalo.Fim))
+            .ToListAsync(ct);
+        return compromissos.Concat(atendimentos).Concat(realizacoes).Concat(atividades)
+            .OrderBy(c => c.Inicio).ThenBy(c => c.Id).ToList();
     }
 
     public void Adicionar(Feriado f) => db.Feriados.Add(f);

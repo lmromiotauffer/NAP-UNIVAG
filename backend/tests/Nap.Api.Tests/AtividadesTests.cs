@@ -92,8 +92,9 @@ public class AtividadesTests(ApiFactory fabrica)
         var cursoId = await CursoDireitoAsync(admin);
         var inicio = InicioAleatorio();
         var institucional = await IdAsync(await Enviar(ana, HttpMethod.Post, "/api/atividades", Corpo(null, inicio, "Institucional")));
+        // Logo após a primeira (horários consecutivos são permitidos): +3h chegaria às 17h locais, fora da escala padrão.
         var doCurso = await IdAsync(await Enviar(ana, HttpMethod.Post, "/api/atividades",
-            Corpo(null, inicio.AddHours(3), "Do curso", cursoId)));
+            Corpo(null, inicio.AddHours(1), "Do curso", cursoId)));
 
         Assert.Equal(HttpStatusCode.NotFound, (await coord.GetAsync($"/api/atividades/{institucional}")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await coord.GetAsync($"/api/atividades/{doCurso}")).StatusCode);

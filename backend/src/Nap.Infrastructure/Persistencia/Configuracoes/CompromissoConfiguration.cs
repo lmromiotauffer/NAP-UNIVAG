@@ -29,10 +29,12 @@ public class CompromissoConfiguration : IEntityTypeConfiguration<Compromisso>
         builder.HasOne<Aluno>().WithMany().HasForeignKey(c => c.AlunoId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<UsuarioIdentidade>().WithMany().HasForeignKey(c => c.RealizadoPorId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(c => c.GrupoId);
+        // Agenda da equipe inteira (sem profissional) filtra por RealizacaoInicio e por Inicio; o de Inicio é manual, abaixo.
+        builder.HasIndex(c => c.RealizacaoInicio);
         builder.HasMany(c => c.CorrecoesRealizacao).WithOne().HasForeignKey("CompromissoId").IsRequired().OnDelete(DeleteBehavior.Cascade);
         builder.Navigation(c => c.CorrecoesRealizacao).UsePropertyAccessMode(PropertyAccessMode.Field);
         // Índices (ProfissionalId, Inicio) e (AlunoId, Inicio) filtrado: o EF não aceita índice com membro de tipo
-        // complexo, então são criados à mão na migration Inicial.
+        // complexo, então são criados à mão na migration Inicial; o de (Inicio) na IndicesCompromissosInicio.
     }
 }
 

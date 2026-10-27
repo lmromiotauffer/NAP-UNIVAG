@@ -20,8 +20,7 @@ public class RegistrarAtividadeValidator : AbstractValidator<RegistrarAtividadeC
         RuleFor(x => x.Tipo).IsInEnum();
         RuleFor(x => x.Descricao).NotEmpty().WithMessage("Informe a descrição da atividade.")
             .Must(d => d is null || d.Trim().Length is >= 3 and <= 2000).WithMessage("A descrição deve ter de 3 a 2000 caracteres.");
-        RuleFor(x => x.Fim).GreaterThan(x => x.Inicio).WithMessage("O horário de término deve ser posterior ao de início.")
-            .Must((x, fim) => fim - x.Inicio <= TimeSpan.FromHours(12)).WithMessage("A duração não pode ultrapassar 12 horas.");
+        RuleFor(x => x.Fim).IntervaloValido(x => x.Inicio);
         When(x => x.CompromissoId is null, () =>
             RuleFor(x => x.JustificativaAvulso).NotEmpty().WithMessage("Informe a justificativa da atividade avulsa.")
                 .Must(j => j is null || j.Trim().Length is >= 5 and <= 500).WithMessage("A justificativa deve ter de 5 a 500 caracteres."));
@@ -30,7 +29,7 @@ public class RegistrarAtividadeValidator : AbstractValidator<RegistrarAtividadeC
 
 public sealed class RegistrarAtividadeHandler(IValidator<RegistrarAtividadeCommand> validador, IAtividadeRepository atividades,
     IAgendaRepository agenda, ICursoQueries cursos, IUsuarioQueries usuarios, IUsuarioAtual usuario, IRelogio relogio,
-    IAuditoria auditoria, IUnidadeDeTrabalho uow, ICacheConsultas cache, ServicoFechamento fechamento)
+    IAuditoria auditoria, IUnidadeDeTrabalho uow, ICacheConsultas cache, ServicoFechamento fechamento, ServicoEscala escala)
 {
     public async Task<Guid> Handle(RegistrarAtividadeCommand comando, CancellationToken ct = default)
     {
@@ -58,14 +57,17 @@ public sealed class RegistrarAtividadeHandler(IValidator<RegistrarAtividadeComma
         {
             var compromisso = await agenda.ObterAsync(compromissoId, tct) ?? throw new NotFoundException("Compromisso");
             if (!usuario.EhCoordenacao() && compromisso.ProfissionalId != usuario.Id) throw new ForbiddenException();
-            await fechamento.ExigirSemanaAbertaAsync(compromisso.ProfissionalId, compromisso.Intervalo.Inicio, tct);
-            await fechamento.ExigirSemanaAbertaAsync(compromisso.ProfissionalId, intervalo.Inicio, tct);
+            await fechamento.ExigirSemanaAbertaAsync(compromisso.ProfissionalId, compromisso.Intervalo, tct);
+            await fechamento.ExigirSemanaAbertaAsync(compromisso.ProfissionalId, intervalo, tct);
             if (await atividades.ExisteParaCompromissoAsync(compromissoId, tct))
                 throw new ConflictException("Este agendamento já possui atividade registrada.");
 
             // O intervalo pode ser ajustado: o próprio compromisso (ainda Agendado) não conta como conflito.
             if (intervalo != compromisso.Intervalo)
                 await agenda.GarantirSemConflitoAsync(compromisso.ProfissionalId, null, intervalo, compromissoId, true, tct);
+            // Mesma regra do agendamento: um início novo passa pela escala (fora dela, só com autorização).
+            if (intervalo.Inicio != compromisso.Intervalo.Inicio)
+                await escala.ExigirDentroDaEscalaAsync(compromisso.ProfissionalId, intervalo.Inicio, tct);
             var atividade = AtividadeCurso.RegistrarDeCompromisso(compromisso, intervalo, comando.CursoId, comando.Tipo,
                 comando.Descricao, usuario.Id, relogio.Agora);
             atividades.Adicionar(atividade);
@@ -75,7 +77,7 @@ public sealed class RegistrarAtividadeHandler(IValidator<RegistrarAtividadeComma
         }, ct);
     }
 
-    // Avulsa não passa pela escala nem bloqueia feriado (atividade noturna vira tempo extra), mas não pode se sobrepor.
+    // Avulsa segue a escala como a agendada e o atendimento avulso: fora dela (noturna, feriado), só com autorização.
     private async Task<Guid> RegistrarAvulsaAsync(RegistrarAtividadeCommand comando, CancellationToken ct)
     {
         var profissionalId = await usuarios.ResolverProfissionalAsync(usuario, comando.ProfissionalId, ct);
@@ -87,8 +89,9 @@ public sealed class RegistrarAtividadeHandler(IValidator<RegistrarAtividadeComma
 
         return await uow.EmTransacaoAsync(async tct =>
         {
-            await fechamento.ExigirSemanaAbertaAsync(profissionalId, intervalo.Inicio, tct);
+            await fechamento.ExigirSemanaAbertaAsync(profissionalId, intervalo, tct);
             await agenda.GarantirSemConflitoAsync(profissionalId, null, intervalo, null, true, tct);
+            await escala.ExigirDentroDaEscalaAsync(profissionalId, intervalo.Inicio, tct);
             atividades.Adicionar(atividade);
             auditoria.Registrar("atividade.registro", "AtividadeCurso", atividade.Id);
             await uow.SalvarAsync(tct);

@@ -18,8 +18,7 @@ public class CorrigirAtendimentoValidator : AbstractValidator<CorrigirAtendiment
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.Estado).IsInEnum();
         RuleFor(x => x.Tipo).IsInEnum();
-        RuleFor(x => x.Fim).GreaterThan(x => x.Inicio).WithMessage("O horário de término deve ser posterior ao de início.")
-            .Must((x, fim) => fim - x.Inicio <= TimeSpan.FromHours(12)).WithMessage("A duração não pode ultrapassar 12 horas.");
+        RuleFor(x => x.Fim).IntervaloValido(x => x.Inicio);
         RuleFor(x => x.DemandaPrincipal).MaximumLength(5000);
         RuleFor(x => x.ObservacoesPrivadas).MaximumLength(5000);
         RuleFor(x => x.RecomendacoesEncaminhamento).MaximumLength(5000);
@@ -55,12 +54,14 @@ public sealed class CorrigirAtendimentoHandler(IValidator<CorrigirAtendimentoCom
         var mudouHorario = intervalo != atendimento.Intervalo;
         await uow.EmTransacaoAsync(async tct =>
         {
-            await fechamento.ExigirSemanaAbertaAsync(atendimento.ProfissionalId, atendimento.Intervalo.Inicio, tct);
-            await fechamento.ExigirSemanaAbertaAsync(atendimento.ProfissionalId, intervalo.Inicio, tct);
+            await fechamento.ExigirSemanaAbertaAsync(atendimento.ProfissionalId, atendimento.Intervalo, tct);
+            await fechamento.ExigirSemanaAbertaAsync(atendimento.ProfissionalId, intervalo, tct);
             if (mudouHorario || (vaiOcupar && !ocupava))
                 await agenda.GarantirSemConflitoAsync(atendimento.ProfissionalId, atendimento.AlunoId, intervalo, atendimento.Id, vaiOcupar, tct);
-            // Só o horário novo passa pela escala: corrigir o texto de um atendimento numa data que virou feriado continua possível.
-            if (mudouHorario) await escala.ExigirDentroDaEscalaAsync(atendimento.ProfissionalId, comando.Inicio, tct);
+            // Só um início novo passa pela escala: corrigir o texto ou só o término de um atendimento numa data que virou
+            // feriado (ou cuja autorização foi revogada) continua possível.
+            if (intervalo.Inicio != atendimento.Intervalo.Inicio)
+                await escala.ExigirDentroDaEscalaAsync(atendimento.ProfissionalId, comando.Inicio, tct);
             atendimento.Corrigir(comando.Estado, comando.Tipo, intervalo, dados, comando.Justificativa, usuario.Id,
                 ehResponsavel, relogio.Agora);
             auditoria.Registrar("atendimento.correcao", "Atendimento", atendimento.Id);

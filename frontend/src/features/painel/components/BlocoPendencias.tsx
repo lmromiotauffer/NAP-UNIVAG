@@ -22,7 +22,7 @@ const TIPOS: Record<string, { variante: VarianteSemantica; rotulo: string; cor: 
 };
 const PADRAO = { variante: "neutro" as const, rotulo: "Pendente", cor: "text-texto" };
 // Link de ação do alerta: mesmo hover e transição do botão "Detalhes".
-const classeAcao = "ml-auto flex items-center gap-1 rounded-full bg-realce px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-primaria transition-colors hover:bg-primaria/15 pointer-coarse:min-h-11";
+const classeAcao = "ml-auto flex items-center gap-1 rounded-full bg-realce px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap text-primaria transition-colors duration-150 hover:bg-primaria/15 pointer-coarse:min-h-11";
 
 /** Mais dias parados / ocorrências primeiro; sem número por último. */
 const ordenarAlertas = (a: Alerta[]) => [...a].sort((x, y) => (y.diasOuOcorrencias ?? -1) - (x.diasOuOcorrencias ?? -1));
@@ -60,9 +60,7 @@ function Itens({ alertas }: { alertas: Alerta[] }) {
                 Agenda
                 <ChevronRight aria-hidden="true" className="size-3" />
               </Link>
-            ) : (
-              <span />
-            )}
+            ) : null}
           </li>
         );
       })}

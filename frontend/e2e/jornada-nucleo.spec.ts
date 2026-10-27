@@ -1,14 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { entrar, sair } from "./apoio";
-
-const diaCuiaba = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Cuiaba" }).format(d);
+import { hojeCivil, entrar, sair } from "./apoio";
 
 /** Dia útil mais recente antes de hoje: o horário já terminou e a agenda recusa fim de semana. */
 function diaUtilAnterior(): string {
   let d = new Date();
   do d = new Date(d.getTime() - 86_400_000);
-  while ([0, 6].includes(new Date(`${diaCuiaba(d)}T12:00:00Z`).getUTCDay()));
-  return diaCuiaba(d);
+  while ([0, 6].includes(new Date(`${hojeCivil(d)}T12:00:00Z`).getUTCDay()));
+  return hojeCivil(d);
 }
 
 test("cadastrar, agendar, registrar e reencontrar o aluno", async ({ page }) => {
@@ -28,7 +26,7 @@ test("cadastrar, agendar, registrar e reencontrar o aluno", async ({ page }) => 
   await cadastro.getByLabel("Matrícula").fill(matricula);
   await cadastro.getByLabel("Curso").selectOption({ label: "Psicologia" });
   await cadastro.getByLabel("Semestre").fill("3");
-  await cadastro.getByLabel("Início do acompanhamento").fill(diaCuiaba(new Date()));
+  await cadastro.getByLabel("Início do acompanhamento").fill(hojeCivil(new Date()));
   await cadastro.getByLabel("Profissional responsável").selectOption({ label: "Ana Beatriz Rocha" });
   await cadastro.getByRole("button", { name: "Salvar" }).click();
   await expect(page.getByRole("heading", { level: 1, name: nome })).toBeVisible();

@@ -140,18 +140,43 @@ public class DocumentosTests
         Assert.Empty(_armazenamento.Arquivos);
     }
 
-    [Theory]
-    [InlineData(Perfis.CoordenadorCurso)]
-    [InlineData(Perfis.Sip)]
-    public async Task Coordenador_e_sip_nao_anexam(string perfil)
+    [Fact]
+    public async Task Commit_com_resposta_perdida_mantem_o_arquivo()
     {
-        var usuario = new UsuarioAtualFalso(perfil, perfil == Perfis.CoordenadorCurso ? _curso : null);
+        var uow = new UnidadeDeTrabalhoFalsa { FalharAoSalvar = true };
+        _repo.CommitApesarDaFalha = true;
 
-        await Assert.ThrowsAsync<ForbiddenException>(() =>
+        await Assert.ThrowsAsync<InvalidOperationException>(() => AnexarHandler(Profissional(), uow).Handle(Anexar("laudo.pdf", Pdf), TestContext.Current.CancellationToken));
+
+        Assert.Single(_armazenamento.Arquivos);
+    }
+
+    [Theory]
+    [InlineData(Perfis.Sip, null, typeof(ForbiddenException))]
+    [InlineData(Perfis.CoordenadorCurso, null, typeof(ForbiddenException))]
+    [InlineData(Perfis.CoordenadorCurso, "outro curso", typeof(NotFoundException))]
+    public async Task Sip_e_coordenador_fora_do_curso_nao_anexam(string perfil, string? curso, Type erro)
+    {
+        var usuario = new UsuarioAtualFalso(perfil, curso is null ? null : Guid.NewGuid());
+
+        await Assert.ThrowsAsync(erro, () =>
             AnexarHandler(usuario).Handle(Anexar("laudo.pdf", Pdf), TestContext.Current.CancellationToken));
 
         Assert.Equal(0, _armazenamento.Gravacoes);
         Assert.Empty(_repo.Documentos);
+    }
+
+    [Fact]
+    public async Task Coordenador_do_curso_anexa_ja_compartilhado()
+    {
+        var coordenador = new UsuarioAtualFalso(Perfis.CoordenadorCurso, _curso);
+
+        await AnexarHandler(coordenador).Handle(Anexar("laudo.pdf", Pdf), TestContext.Current.CancellationToken);
+
+        var d = Assert.Single(_repo.Documentos);
+        Assert.Equal(VisibilidadeDocumento.CompartilhadoCoordenacao, d.Visibilidade);
+        Assert.Equal(coordenador.Id, d.CompartilhadoPorId);
+        Assert.Equal(_curso, d.CursoId);
     }
 
     [Fact]
@@ -160,7 +185,7 @@ public class DocumentosTests
         var ct = TestContext.Current.CancellationToken;
         var d = Semear();
         var uow = new UnidadeDeTrabalhoFalsa();
-        var handler = new CompartilharDocumentoHandler(new CompartilharDocumentoValidator(), _repo, Profissional(), new RelogioFixo(),
+        var handler = new CompartilharDocumentoHandler(new CompartilharDocumentoValidator(), _repo, _alunos, Profissional(), new RelogioFixo(),
             _auditoria, uow);
 
         var erro = await Assert.ThrowsAsync<ValidationException>(() =>
@@ -182,7 +207,7 @@ public class DocumentosTests
     public async Task Alterar_categoria_mantem_visibilidade()
     {
         var d = Semear();
-        d.Compartilhar("Necessário para adaptação", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        d.Compartilhar("Necessário para adaptação", Guid.NewGuid(), d.CursoId, DateTimeOffset.UtcNow);
         var handler = new AlterarCategoriaDocumentoHandler(new AlterarCategoriaDocumentoValidator(), _repo, Profissional(),
             _auditoria, new UnidadeDeTrabalhoFalsa());
 
@@ -216,7 +241,7 @@ public class DocumentosTests
         var ct = TestContext.Current.CancellationToken;
         var restrito = Semear();
         var compartilhado = Semear();
-        compartilhado.Compartilhar("Necessário para adaptação", Guid.NewGuid(), DateTimeOffset.UtcNow);
+        compartilhado.Compartilhar("Necessário para adaptação", Guid.NewGuid(), compartilhado.CursoId, DateTimeOffset.UtcNow);
         var handler = new RevogarCompartilhamentoDocumentoHandler(new RevogarCompartilhamentoDocumentoValidator(), _repo,
             new UsuarioAtualFalso(Perfis.CoordenadorCurso, _curso), new RelogioFixo(), _auditoria, new UnidadeDeTrabalhoFalsa());
 
@@ -225,6 +250,22 @@ public class DocumentosTests
         await Assert.ThrowsAsync<ForbiddenException>(() =>
             handler.Handle(new RevogarCompartilhamentoDocumentoCommand(compartilhado.Id, "Não é mais necessário", "v1"), ct));
         Assert.Equal(VisibilidadeDocumento.CompartilhadoCoordenacao, compartilhado.Visibilidade);
+    }
+
+    [Fact]
+    public async Task Consulta_e_lista_auditam()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var d = Semear();
+        var consultas = new DocumentoQueriesFalso(_repo);
+
+        await new ObterDocumentoHandler(new ObterDocumentoValidator(), consultas, Profissional(), _auditoria, new UnidadeDeTrabalhoFalsa())
+            .Handle(new ObterDocumentoQuery(d.Id), ct);
+        await new ListarDocumentosHandler(new ListarDocumentosValidator(), consultas, Profissional(), _auditoria, new UnidadeDeTrabalhoFalsa())
+            .Handle(new ListarDocumentosQuery(d.AlunoId), ct);
+
+        Assert.Equal([("documento.consulta", (Guid?)d.Id), ("documento.lista.consulta", (Guid?)d.AlunoId)],
+            _auditoria.Registros.Select(r => (r.Acao, r.RecursoId)));
     }
 
     [Fact]

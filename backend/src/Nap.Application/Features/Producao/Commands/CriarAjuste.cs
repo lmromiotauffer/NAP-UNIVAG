@@ -29,11 +29,13 @@ public sealed class CriarAjusteHandler(IValidator<CriarAjusteCommand> validador,
     {
         await validador.ValidarAsync(comando, ct);
         if (!usuario.EhCoordenacao()) throw new ForbiddenException();
+        if (comando.Data > relogio.Hoje)
+            throw Validacao.ErroDeCampo("data", "A data do ajuste não pode ser futura.");
 
-        // Ativo, ou inativo ajustado em data anterior à desativação.
+        // Membro da equipe que já existia e não estava inativo na data.
         var profissional = (await usuarios.ListarProfissionaisDaProducaoAsync(comando.Data, comando.Data, relogio.Fuso, comando.ProfissionalId, ct))
             .FirstOrDefault();
-        if (profissional is null || (!profissional.Ativo && comando.Data >= (profissional.DesativadoEm ?? DateOnly.MinValue)))
+        if (profissional is null || profissional.InativoEm(comando.Data) || comando.Data < (profissional.AtivoDesde ?? DateOnly.MinValue))
             throw Validacao.ErroDeCampo("profissionalId", "O profissional deve ser um membro da equipe NAP ativo na data do ajuste.");
 
         var ajuste = AjusteProducao.Criar(comando.ProfissionalId, comando.Data, comando.Categoria, comando.Ocorrencias, comando.Minutos,

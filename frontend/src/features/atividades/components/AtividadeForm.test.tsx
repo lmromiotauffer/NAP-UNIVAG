@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Compromisso } from "../../../lib/types";
 import { responderApi } from "../../../test/apiFalsa";
 import { atividadeService } from "../services/atividadeService";
@@ -50,6 +50,10 @@ function montar(c?: Compromisso) {
 
 beforeEach(() => {
   registrar.mockReset();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("AtividadeForm", () => {
@@ -111,5 +115,21 @@ describe("AtividadeForm", () => {
     expect(await screen.findByText("Este agendamento já possui atividade registrada.")).toBeInTheDocument();
     expect(aoConcluir).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/Descrição/)).toHaveValue("Reunião com a turma");
+  });
+  it("Termino_no_futuro_e_descricao_curta_sao_recusados", async () => {
+    // "Agora" fixo às 08:30 do dia da atividade: o término às 09:00 ainda não chegou (restaurado no afterEach).
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-29T08:30:00-04:00"));
+    const { user } = montar();
+    // Digitar num input[type=date] vazio não registrou o valor no jsdom; ele entra por evento de mudança.
+    fireEvent.change(screen.getByLabelText(/Data/), { target: { value: "2026-09-29" } });
+    await user.type(screen.getByLabelText(/Início/), "08:00");
+    await user.type(screen.getByLabelText(/Fim/), "09:00");
+    await user.selectOptions(screen.getByLabelText(/Tipo/), "Outra");
+    await user.type(screen.getByLabelText(/Descrição/), "ab");
+    await user.click(screen.getByRole("button", { name: "Registrar" }));
+
+    expect(await screen.findByText("A atividade ainda não terminou; registre depois do horário de término.")).toBeInTheDocument();
+    expect(screen.getByText("Descreva a atividade (de 3 a 2000 caracteres).")).toBeInTheDocument();
+    expect(registrar).not.toHaveBeenCalled();
   });
 });

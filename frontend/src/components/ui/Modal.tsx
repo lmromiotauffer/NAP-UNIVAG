@@ -54,7 +54,8 @@ export function Modal({ aberto, aoFechar, titulo, children, rodape, bloqueado }:
         pressionouFundo.current = e.target === e.currentTarget;
       }}
       onClick={aoClicar}
-      className="m-auto w-full max-w-lg rounded-lg border border-borda bg-superficie p-0 text-texto backdrop:bg-bloco/60"
+      // rounded-xl: mesmo raio das outras camadas flutuantes (menu "Mais", lista do select); o 8px destoava dos cartões (14–20px).
+      className="m-auto w-full max-w-lg rounded-xl border border-borda bg-superficie p-0 text-texto backdrop:bg-bloco/60"
     >
       {aberto && (
         <div className="flex flex-col gap-4 p-5">

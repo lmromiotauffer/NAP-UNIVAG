@@ -25,9 +25,17 @@ public static class RegrasComunicacao
         if (u.Perfil == Perfis.Gestao || !Perfis.Todos.Contains(u.Perfil)) throw new ForbiddenException();
     }
 
-    /// <summary>Rascunho existe só para o autor; enviada, para os dois participantes.</summary>
+    /// <summary>Rascunho existe só para o autor; enviada, para os dois participantes. Ler e responder também exigem
+    /// <see cref="AlcancaVinculos"/>.</summary>
     public static bool PodeVer(IUsuarioAtual u, Mensagem m) =>
         m.Estado == EstadoMensagem.Rascunho ? m.AutorId == u.Id : m.EhParticipante(u.Id);
+
+    /// <summary>Participante que, com o perfil e o curso de hoje, ainda alcança os vínculos: a mesma regra da leitura
+    /// (<c>ComunicacaoQueries.Legiveis</c>), para os comandos sobre a mensagem.</summary>
+    public static async Task<bool> PodeVerHojeAsync(IUsuarioAtual u, Mensagem m, IAlunoRepository alunos,
+        IEncaminhamentoRepository encaminhamentos, CancellationToken ct) =>
+        PodeVer(u, m) && (m.Estado == EstadoMensagem.Rascunho
+            || AlcancaVinculos(u.Perfil, u.CursoId, await VinculosDaOriginalAsync(m, alunos, encaminhamentos, ct)));
 
     /// <summary>
     /// Valida os vínculos (no rascunho e no envio) e devolve os que serão gravados. Só com encaminhamento, o aluno é o dele; com aluno, o curso
@@ -51,7 +59,8 @@ public static class RegrasComunicacao
         if (alunoId is { } idAluno)
         {
             var aluno = await alunos.ObterAsync(idAluno, ct);
-            var visivel = aluno is not null && (u.EhEquipeNap() || encaminhamento is not null
+            // O encaminhamento só abre o aluno ao SIP: o coordenador antigo ainda vê o encaminhamento, mas não o aluno transferido.
+            var visivel = aluno is not null && (u.EhEquipeNap() || (u.Perfil == Perfis.Sip && encaminhamento is not null)
                 || (u.Perfil == Perfis.CoordenadorCurso && u.CursoId == aluno.CursoAtualId));
             if (!visivel) throw Validacao.ErroDeCampo("alunoId", "Aluno inexistente.");
             if (cursoId is not null && cursoId != aluno!.CursoAtualId)
@@ -62,12 +71,14 @@ public static class RegrasComunicacao
         {
             if (!await cursos.CursoAtivoExisteAsync(idCurso, ct))
                 throw Validacao.ErroDeCampo("cursoId", "Curso inexistente.");
-            if (u.Perfil == Perfis.CoordenadorCurso && u.CursoId != idCurso)
-                throw Validacao.ErroDeCampo("cursoId", "Use o seu próprio curso.");
         }
 
-        return new VinculosMensagem(cursoId, alunoId, encaminhamentoId,
+        var vinculos = new VinculosMensagem(cursoId, alunoId, encaminhamentoId,
             encaminhamento?.Destino is DestinoEncaminhamento.Sip or DestinoEncaminhamento.ClinicaEscola);
+        // Quem envia precisa alcançar os vínculos como quem recebe: senão o SIP enviaria, só com curso, uma mensagem que ele mesmo não lê.
+        if (!AlcancaVinculos(u.Perfil, u.CursoId, vinculos))
+            throw Validacao.ErroDeCampo("cursoId", "Seu perfil ou curso não alcança este vínculo.");
+        return vinculos;
     }
 
     /// <summary>
@@ -106,8 +117,35 @@ public static class RegrasComunicacao
 
     /// <summary>Regra única do destinatário: usada no envio e na lista de destinatários disponíveis.</summary>
     public static bool PodeReceber(Guid remetenteId, UsuarioResumoDto d, VinculosMensagem v) =>
-        d.Ativo && d.Id != remetenteId && d.Perfil != Perfis.Gestao && (v.SemVinculo
-            || Perfis.EquipeNap.Contains(d.Perfil)
-            || (d.Perfil == Perfis.CoordenadorCurso && d.CursoId is not null && d.CursoId == v.CursoId)
-            || (d.Perfil == Perfis.Sip && v.EncaminhamentoSip));
+        d.Ativo && d.Id != remetenteId && AlcancaVinculos(d.Perfil, d.CursoId, v);
+
+    /// <summary>
+    /// Perfil e curso que alcançam os vínculos (com o curso atual do aluno): quem pode receber e, com o perfil de hoje,
+    /// quem ainda lê e responde. Espelhada na consulta (<c>ComunicacaoQueries</c>).
+    /// </summary>
+    public static bool AlcancaVinculos(string perfil, Guid? cursoId, VinculosMensagem v) =>
+        perfil != Perfis.Gestao && (v.SemVinculo
+            || Perfis.EquipeNap.Contains(perfil)
+            || (perfil == Perfis.CoordenadorCurso && cursoId is not null && cursoId == v.CursoId)
+            || (perfil == Perfis.Sip && v.EncaminhamentoSip));
+
+    /// <summary>
+    /// Lida e arquivamento de cada participante ficam em colunas próprias, mas a versão da linha é uma só: se o outro gravou
+    /// entre a leitura e o SaveChanges, relê e aplica de novo uma vez, em vez de devolver um 409 sem sobreposição real.
+    /// </summary>
+    public static async Task SalvarRelendoSeConflitarAsync(IMensagemRepository mensagens, IUnidadeDeTrabalho uow, Mensagem m,
+        Action aplicar, CancellationToken ct)
+    {
+        aplicar();
+        try
+        {
+            await uow.SalvarAsync(ct);
+        }
+        catch (ConflictException)
+        {
+            if (!await mensagens.RecarregarAsync(m, ct)) throw new NotFoundException("Mensagem");
+            aplicar();
+            await uow.SalvarAsync(ct);
+        }
+    }
 }

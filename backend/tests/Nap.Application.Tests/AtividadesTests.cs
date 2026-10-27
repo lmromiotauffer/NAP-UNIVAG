@@ -1,4 +1,5 @@
 using Nap.Application.Comum;
+using Nap.Application.Features.Agenda;
 using Nap.Application.Features.Atividades;
 using Nap.Application.Features.Atividades.Commands;
 using Nap.Application.Features.Atividades.Queries;
@@ -26,20 +27,24 @@ public class AtividadesTests
 
     private RegistrarAtividadeHandler Registrar(IUsuarioAtual usuario, params Guid[] profissionaisAtivos) =>
         new(new RegistrarAtividadeValidator(), _repo, _agenda, new CursoQueriesFalso(_curso),
-            new UsuarioQueriesFalso(profissionaisAtivos), usuario, new RelogioFixo(), _auditoria, _uow, _cache, Fechamento());
+            new UsuarioQueriesFalso(profissionaisAtivos), usuario, new RelogioFixo(), _auditoria, _uow, _cache, Fechamento(), Escala());
 
     private ServicoFechamento Fechamento() => new(_fechamentos, new RelogioFixo());
 
+    private readonly EscalaRepositoryEmMemoria _escalas = new();
+
+    private ServicoEscala Escala() => new(_escalas, new FeriadoRepositoryEmMemoria(), new RelogioFixo());
+
     private CorrigirAtividadeHandler Corrigir(IUsuarioAtual usuario, UnidadeDeTrabalhoFalsa? uow = null) =>
         new(new CorrigirAtividadeValidator(), _repo, _consultas, _agenda, new CursoQueriesFalso(_curso), usuario,
-            new RelogioFixo(), _auditoria, uow ?? _uow, _cache, Fechamento());
+            new RelogioFixo(), _auditoria, uow ?? _uow, _cache, Fechamento(), Escala());
 
     private static UsuarioAtualFalso Profissional() => new(Perfis.ProfissionalNap);
 
     private Compromisso NovoCompromisso(Guid profissionalId, TipoCompromisso tipo = TipoCompromisso.AtividadeCurso)
     {
         var c = Compromisso.Criar(tipo, "Roda de conversa", IntervaloHorario.Criar(Inicio, Inicio.AddHours(1)), profissionalId,
-            null, null, profissionalId, Inicio.AddDays(-5));
+            null, null, profissionalId);
         _agenda.Adicionar(c);
         return c;
     }
@@ -104,9 +109,18 @@ public class AtividadesTests
     }
 
     [Fact]
-    public async Task Avulsa_fora_da_escala_e_aceita()
+    public async Task Avulsa_fora_da_escala_exige_autorizacao()
     {
-        var id = await Registrar(Profissional()).Handle(Avulsa(Inicio.AddHours(7)), TestContext.Current.CancellationToken);
+        var usuario = Profissional();
+        var noturna = Inicio.AddHours(7);
+        var ex = await Assert.ThrowsAsync<DomainException>(() =>
+            Registrar(usuario).Handle(Avulsa(noturna), TestContext.Current.CancellationToken));
+        Assert.Equal("Fora da escala do profissional neste dia.", ex.Message);
+        Assert.Empty(_repo.Atividades);
+
+        _escalas.Autorizacoes.Add(AutorizacaoForaEscala.Criar(usuario.Id, IntervaloHorario.Criar(noturna, noturna.AddHours(2)),
+            "Atividade noturna do curso", Guid.NewGuid(), Inicio));
+        var id = await Registrar(usuario).Handle(Avulsa(noturna), TestContext.Current.CancellationToken);
         Assert.Equal(id, Assert.Single(_repo.Atividades).Id);
     }
 

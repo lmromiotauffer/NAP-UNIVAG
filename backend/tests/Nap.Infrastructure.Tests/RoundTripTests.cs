@@ -152,7 +152,7 @@ public class RoundTripTests(SqlServerFixture fx)
         var prof = await fx.CriarProfissionalAsync();
         var aluno = await CriarAlunoAsync(fx, await fx.CriarCursoAsync(), prof);
         var c = Compromisso.Criar(TipoCompromisso.Atendimento, "Atendimento", IntervaloHorario.Criar(Agora, Agora.AddHours(1)),
-            prof, aluno.Id, null, prof, Agora);
+            prof, aluno.Id, null, prof);
         await using (var a = fx.CriarContexto())
         {
             new AgendaRepository(a).Adicionar(c);
@@ -180,12 +180,27 @@ public class RoundTripTests(SqlServerFixture fx)
         var noA = (await new AlunoRepository(a).ObterAsync(aluno.Id, ct))!;
         var noB = (await new AlunoRepository(b).ObterAsync(aluno.Id, ct))!;
 
-        noA.AtualizarDados("Nome alterado em A", 4, null, null, prof);
+        noA.AtualizarDados("Nome alterado em A", 4, null, null, prof, true);
         await new UnidadeDeTrabalho(a).SalvarAsync(ct);
-        noB.AtualizarDados("Nome alterado em B", 5, null, null, prof);
+        noB.AtualizarDados("Nome alterado em B", 5, null, null, prof, true);
 
         var ex = await Assert.ThrowsAsync<ConflictException>(() => new UnidadeDeTrabalho(b).SalvarAsync(ct));
         Assert.Equal("O registro foi alterado por outra pessoa. Recarregue e tente novamente", ex.Message);
+    }
+
+    [Fact]
+    public async Task Segundo_pei_do_mesmo_aluno_gera_conflito()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var prof = await fx.CriarProfissionalAsync();
+        var aluno = await CriarAlunoAsync(fx, await fx.CriarCursoAsync(), prof);
+        await using var db = fx.CriarContexto();
+        db.Add(Pei.Criar(aluno.Id, prof, ConteudoDePei(), prof, Agora));
+        await db.SaveChangesAsync(ct);
+        db.Add(Pei.Criar(aluno.Id, prof, ConteudoDePei(), prof, Agora));
+
+        var ex = await Assert.ThrowsAsync<ConflictException>(() => new UnidadeDeTrabalho(db).SalvarAsync(ct));
+        Assert.Equal("O aluno já possui PEI; crie uma nova versão.", ex.Message);
     }
 
     [Fact]
@@ -322,7 +337,7 @@ public class RoundTripTests(SqlServerFixture fx)
         await using (var a2 = fx.CriarContexto())
         {
             var carregado = await a2.Set<Documento>().SingleAsync(d => d.Id == doc.Id, ct);
-            carregado.Compartilhar("Necessário para a coordenação", prof, Agora.AddMinutes(1));
+            carregado.Compartilhar("Necessário para a coordenação", prof, carregado.CursoId, Agora.AddMinutes(1));
             carregado.Arquivar("Documento substituído", prof, Agora.AddMinutes(2));
             await new UnidadeDeTrabalho(a2).SalvarAsync(ct);
         }
@@ -362,7 +377,7 @@ public class RoundTripTests(SqlServerFixture fx)
         var v1 = pei.Versoes.Single();
         v1.EnviarParaRevisao(Agora.AddMinutes(1));
         var hash = CalculadoraHashPei.Calcular(v1.Conteudo);
-        v1.AprovarRevisao(coord, hash, Agora.AddMinutes(2));
+        v1.AprovarRevisao(coord, Agora.AddMinutes(2));
         v1.RegistrarAssinatura(PapelAssinatura.Profissional, prof, "Profissional", hash, "evidencia-1", Agora.AddMinutes(3));
         v1.RegistrarAssinatura(PapelAssinatura.Aluno, null, "Aluno", hash, "evidencia-2", Agora.AddMinutes(4));
         pei.Publicar(v1, coord, curso, Agora.AddMinutes(5));
@@ -408,7 +423,7 @@ public class RoundTripTests(SqlServerFixture fx)
         var v2 = v[1];
         v2.EnviarParaRevisao(Agora.AddMinutes(10));
         var hash = CalculadoraHashPei.Calcular(v2.Conteudo);
-        v2.AprovarRevisao(coord, hash, Agora.AddMinutes(11));
+        v2.AprovarRevisao(coord, Agora.AddMinutes(11));
         v2.RegistrarAssinatura(PapelAssinatura.Profissional, prof, "Profissional", hash, "e3", Agora.AddMinutes(12));
         v2.RegistrarAssinatura(PapelAssinatura.Aluno, null, "Aluno", hash, "e4", Agora.AddMinutes(13));
         lido.Publicar(v2, coord, curso, Agora.AddMinutes(14));
@@ -461,7 +476,7 @@ public class RoundTripTests(SqlServerFixture fx)
         {
             var usuario = new UsuarioAtualTeste(coordCurso, Perfis.CoordenadorCurso, curso);
             var relogio = new RelogioTeste(Agora.AddHours(1));
-            return new RegistrarCienciaPeiHandler(new RegistrarCienciaPeiValidator(), peis, usuario, relogio,
+            return new RegistrarCienciaPeiHandler(new RegistrarCienciaPeiValidator(), peis, new AlunoRepository(db), usuario, relogio,
                 AuditoriaTeste.Criar(db, usuario, relogio), new UnidadeDeTrabalho(db), new CacheNulo()).Handle(new RegistrarCienciaPeiCommand(v1), ct);
         }
 

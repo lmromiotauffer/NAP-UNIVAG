@@ -1,7 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { entrar, sair, tokenDe } from "./apoio";
-
-const diaCuiaba = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Cuiaba" }).format(d);
+import { hojeCivil, entrar, sair, tokenDe } from "./apoio";
 
 test("PEI percorre revisão, assinaturas, publicação e ciência da coordenação de curso", async ({ page, browser, request }) => {
   const sufixo = Date.now().toString(36).toUpperCase();
@@ -23,7 +21,7 @@ test("PEI percorre revisão, assinaturas, publicação e ciência da coordenaç�
       matricula,
       cursoId: cursos.find((c) => c.nome === "Direito")?.id,
       semestre: 2,
-      inicioAcompanhamento: diaCuiaba(new Date()),
+      inicioAcompanhamento: hojeCivil(new Date()),
       profissionalResponsavelId: anaId,
     },
   });
@@ -37,8 +35,8 @@ test("PEI percorre revisão, assinaturas, publicação e ciência da coordenaç�
   await page.getByRole("button", { name: "Criar PEI" }).click();
   const criar = page.getByRole("dialog", { name: "Criar PEI" });
   await criar.getByLabel("Profissional responsável").selectOption(anaId);
-  await criar.getByLabel("Início da vigência").fill(diaCuiaba(new Date()));
-  await criar.getByLabel("Fim da vigência").fill(diaCuiaba(new Date(Date.now() + 180 * 86_400_000)));
+  await criar.getByLabel("Início da vigência").fill(hojeCivil(new Date()));
+  await criar.getByLabel("Fim da vigência").fill(hojeCivil(new Date(Date.now() + 180 * 86_400_000)));
   await criar.getByRole("button", { name: "Criar PEI", exact: true }).click();
   await expect(page).toHaveURL(/\/peis\/versoes\/[0-9a-f-]+$/);
   const urlVersao = page.url();

@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { queryKeys, useInvalidar } from "../../../lib/queryKeys";
 import {
   administracaoService,
@@ -42,9 +42,10 @@ export function useListaUsuarios(f: FiltroUsuariosBody) {
   return useQuery({ queryKey: queryKeys.administracao.usuarios(f), queryFn: () => administracaoService.listarUsuarios(f), placeholderData: keepPreviousData });
 }
 
-// Usuário aparece em listas de profissionais, destinatários, escalas, agenda, atendimentos, painel e produção (nome do profissional).
+// Usuário aparece em listas de profissionais, destinatários, escalas, agenda, atendimentos, alunos (responsável), painel, produção,
+// PEI (responsável), encaminhamentos (solicitante), documentos (autor) e comunicações (remetente).
 function useInvalidarUsuarios() {
-  return useInvalidar([["administracao", "usuarios"], ["administracao", "escalas"], queryKeys.profissionais, ["comunicacoes", "destinatarios"], ["agenda"], ["atendimentos"], ["painel"], ["producao"]]);
+  return useInvalidar([["administracao", "usuarios"], ["administracao", "escalas"], queryKeys.profissionais, ["comunicacoes"], ["agenda"], ["atendimentos"], ["alunos"], ["painel"], ["producao"], ["peis"], ["encaminhamentos"], ["documentos"]]);
 }
 
 /** `gcTime: 0` + `reset()` ao fechar o diálogo: a senha não fica no cache de mutações. */
@@ -74,9 +75,9 @@ export function useAlterarSituacaoUsuario() {
   });
 }
 
-// O nome do curso aparece na lista de usuários (coordenador de curso) e nas telas de alunos.
+// O nome do curso aparece na lista de usuários (coordenador de curso), nas telas de alunos, atividades, PEI, encaminhamentos e no painel.
 function useInvalidarCursos() {
-  return useInvalidar([queryKeys.cursos, ["alunos"], ["administracao", "usuarios"]]);
+  return useInvalidar([queryKeys.cursos, ["alunos"], ["atividades"], ["administracao", "usuarios"], ["peis"], ["encaminhamentos"], ["painel"]]);
 }
 
 export function useCriarCurso() {
@@ -104,9 +105,9 @@ export function useListaEscalas(profissionalId?: string) {
   return useQuery({ queryKey: queryKeys.administracao.escalas(profissionalId), queryFn: () => administracaoService.listarEscalas(profissionalId), placeholderData: keepPreviousData });
 }
 
-// A grade da agenda lê a escala semanal: qualquer mudança de escala ou feriado a invalida.
+// A grade da agenda e a capacidade da produção leem a escala semanal: qualquer mudança de escala ou feriado as invalida.
 function useInvalidarEscalas() {
-  return useInvalidar([["administracao", "escalas"], ["agenda"]]);
+  return useInvalidar([["administracao", "escalas"], ["agenda"], ["producao"]]);
 }
 
 export function useCriarEscala() {
@@ -127,7 +128,7 @@ export function useListaFeriados(ano: number) {
 }
 
 function useInvalidarFeriados() {
-  return useInvalidar([["administracao", "feriados"], ["agenda"]]);
+  return useInvalidar([["administracao", "feriados"], ["agenda"], ["producao"]]);
 }
 
 export function useCriarFeriado() {
@@ -145,10 +146,10 @@ export function useAlertasConfig() {
 }
 
 export function useSalvarAlertas() {
-  const qc = useQueryClient();
+  // Salvar muda os limites usados pelo painel, pelos alertas e pelo prazo dos encaminhamentos.
+  const invalidar = useInvalidar([queryKeys.administracao.alertas, ["painel"], ["encaminhamentos"]]);
   return useMutation({
     mutationFn: ({ body, versao }: { body: AlertasBody; versao: string }) => administracaoService.salvarAlertas(body, versao),
-    // Salvar muda os limites usados pelo painel, pelos alertas e pelo prazo dos encaminhamentos.
-    onSettled: () => Promise.all([queryKeys.administracao.alertas, ["painel"], ["encaminhamentos"]].map((queryKey) => qc.invalidateQueries({ queryKey }))),
+    onSettled: invalidar,
   });
 }

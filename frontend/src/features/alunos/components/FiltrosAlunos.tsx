@@ -4,11 +4,13 @@ import { useSessao } from "../../../auth/useSessao";
 import { BuscaUrl } from "../../../components/ui/BuscaUrl";
 import { classeData, classeFiltro, Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
-import { paginaDaUrl } from "../../../lib/queryKeys";
+import { entre } from "../../../lib/entre";
+import { diaValido } from "../../../lib/format";
+import { comParametro, paginaDaUrl } from "../../../lib/queryKeys";
 import { useCursos, useProfissionais } from "../../compartilhado/catalogos";
 import type { FiltroAlunosBody } from "../services/alunoService";
 import { ESPECIALIDADES, ROTULO_ESPECIALIDADE } from "../../encaminhamentos/rotulos";
-import { ROTULO_SITUACAO, SITUACOES, type Situacao } from "../rotulos";
+import { ROTULO_SITUACAO, SITUACOES } from "../rotulos";
 
 export const CHAVES_FILTRO = ["busca", "cursoId", "profissionalId", "situacao", "inicioDe", "inicioAte", "especialidadeEncaminhamento"] as const;
 type ChaveFiltro = (typeof CHAVES_FILTRO)[number];
@@ -20,10 +22,13 @@ export function filtroDaUrl(params: URLSearchParams): FiltroAlunosBody {
     const valor = params.get(chave)?.trim();
     if (!valor) continue;
     if (chave === "situacao") {
-      if ((SITUACOES as readonly string[]).includes(valor)) filtro.situacao = valor as Situacao;
+      const situacao = entre(SITUACOES, valor);
+      if (situacao) filtro.situacao = situacao;
     } else if (chave === "especialidadeEncaminhamento") {
-      const especialidade = ESPECIALIDADES.find((x) => x === valor);
+      const especialidade = entre(ESPECIALIDADES, valor);
       if (especialidade) filtro.especialidadeEncaminhamento = especialidade;
+    } else if (chave === "inicioDe" || chave === "inicioAte") {
+      if (diaValido(valor)) filtro[chave] = valor; // "2026-13-99" num link antigo iria para a API e viraria 400
     } else filtro[chave] = valor;
   }
   filtro.pagina = paginaDaUrl(params);
@@ -39,16 +44,7 @@ export function FiltrosAlunos() {
   const buscaUrl = params.get("busca") ?? "";
 
   function atualizar(chave: ChaveFiltro, valor: string) {
-    setParams(
-      (atual) => {
-        const proximo = new URLSearchParams(atual);
-        if (valor) proximo.set(chave, valor);
-        else proximo.delete(chave);
-        proximo.delete("pagina");
-        return proximo;
-      },
-      { replace: true },
-    );
+    setParams((atual) => comParametro(atual, chave, valor), { replace: true });
   }
 
   // Coordenador de curso só enxerga encaminhamentos de destino CoordenacaoCurso (docs/permissoes.md): as demais opções nunca casariam.

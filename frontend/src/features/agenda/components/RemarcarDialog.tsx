@@ -7,7 +7,7 @@ import { Button } from "../../../components/ui/Button";
 import { Field } from "../../../components/ui/Field";
 import { Input } from "../../../components/ui/Input";
 import { normalizarErro, tratarErro } from "../../../lib/api";
-import { diaCivil, formatarData, formatarHora, horaCivil, instanteCivil } from "../../../lib/format";
+import { diaCivil, formatarData, formatarIntervalo, horaCivil, instanteCivil } from "../../../lib/format";
 import type { Compromisso, ConflitoAgenda } from "../../../lib/types";
 import { useRemarcarCompromisso } from "../hooks/useAgenda";
 import type { EscopoGrupo } from "../services/agendaService";
@@ -68,12 +68,12 @@ export function RemarcarDialog({
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
       <p className="text-sm text-suave">
-        Horário atual: {formatarData(compromisso.inicio)}, {formatarHora(compromisso.inicio)}–{formatarHora(compromisso.fim)}. {escopo === "Grupo"
+        Horário atual: {formatarData(compromisso.inicio)}, {formatarIntervalo(compromisso.inicio, compromisso.fim)}. {escopo === "Grupo"
           ? "As instâncias do grupo ficam marcadas como remarcadas e novas são criadas, para todos os participantes, no horário escolhido."
           : "O compromisso atual fica marcado como remarcado e um novo é criado no horário escolhido."}
       </p>
       {erroGeral && (
-        <Alert variante="urgente">
+        <Alert variante="urgente" className="animate-surgir">
           {erroGeral}
           <ListaConflitos conflitos={conflitos} />
         </Alert>

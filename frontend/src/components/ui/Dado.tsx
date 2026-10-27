@@ -6,7 +6,8 @@ export function Dado({ rotulo, children, classeValor }: { rotulo: string; childr
   return (
     <div>
       <dt className="text-xs text-suave">{rotulo}</dt>
-      <dd className={cn("m-0", classeValor)}>{children}</dd>
+      {/* break-words: valor longo sem espaço (URL colada, texto clínico) quebra em vez de estourar o diálogo a 320 px. */}
+      <dd className={cn("m-0 break-words", classeValor)}>{children}</dd>
     </div>
   );
 }

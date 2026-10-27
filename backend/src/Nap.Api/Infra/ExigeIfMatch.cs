@@ -29,6 +29,10 @@ public sealed class ExigeIfMatchAttribute : Attribute, IAsyncResourceFilter
 
 public static class IfMatchExtensoes
 {
-    /// <summary>Valor único do <c>If-Match</c> sem as aspas (o filtro já garantiu que existe).</summary>
-    public static string VersaoIfMatch(this HttpContext http) => http.Request.Headers[ExigeIfMatchAttribute.Cabecalho].ToString().Trim().Trim('"');
+    /// <summary>Valor único do <c>If-Match</c> sem as aspas nem o prefixo de ETag fraca <c>W/</c> (o filtro já garantiu que existe).</summary>
+    public static string VersaoIfMatch(this HttpContext http)
+    {
+        var valor = http.Request.Headers[ExigeIfMatchAttribute.Cabecalho].ToString().Trim();
+        return (valor.StartsWith("W/", StringComparison.Ordinal) ? valor[2..] : valor).Trim('"');
+    }
 }

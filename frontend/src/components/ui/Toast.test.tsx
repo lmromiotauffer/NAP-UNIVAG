@@ -31,6 +31,9 @@ describe("Toast", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Falhou.");
 
     act(() => screen.getByRole("button", { name: "Fechar aviso" }).click());
+    // Esmaece por 150 ms antes de desmontar.
+    expect(screen.getByRole("alert")).toHaveClass("animate-sumir");
+    act(() => vi.advanceTimersByTime(150));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

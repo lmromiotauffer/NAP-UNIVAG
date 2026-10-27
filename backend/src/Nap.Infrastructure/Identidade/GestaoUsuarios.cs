@@ -77,8 +77,10 @@ public sealed class GestaoUsuarios(NapDbContext db, UserManager<UsuarioIdentidad
         var usuario = await CarregarAsync(id, versao);
         var mudou = usuario.Ativo != ativo;
         usuario.Ativo = ativo;
-        // ponytail: reativar apaga a data; histórico de períodos de inatividade exigiria tabela de vigência de situação.
-        if (mudou) usuario.DesativadoEm = ativo ? null : relogio.Hoje;
+        // shortcut: um único período de inatividade [DesativadoEm, ReativadoEm); uma nova desativação descarta o anterior.
+        // A produção e os ajustes leem esse período (ProfissionalProducaoDto.InativoEm), inclusive em semanas já fechadas.
+        if (mudou && ativo) usuario.ReativadoEm = relogio.Hoje;
+        else if (mudou) (usuario.DesativadoEm, usuario.ReativadoEm) = (relogio.Hoje, null);
         await SalvarAsync(usuario, revogar: mudou);
     }
 

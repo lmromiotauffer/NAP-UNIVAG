@@ -3,8 +3,8 @@ import type { components } from "../../lib/api-schema";
 
 export type Especialidade = components["schemas"]["Especialidade"];
 export type Destino = components["schemas"]["DestinoEncaminhamento"];
-export type EstadoEncaminhamento = components["schemas"]["EstadoEncaminhamento"];
-export type AcaoRetorno = components["schemas"]["AcaoRetorno"];
+type EstadoEncaminhamento = components["schemas"]["EstadoEncaminhamento"];
+type AcaoRetorno = components["schemas"]["AcaoRetorno"];
 /** O cancelamento tem operação própria (`/cancelar`). */
 export type AcaoRegistravel = Exclude<AcaoRetorno, "Cancelamento">;
 
@@ -87,6 +87,3 @@ export const ACOES_POR_ESTADO: Record<EstadoEncaminhamento, AcaoRegistravel[]> =
   Desistencia: [],
   Cancelado: [],
 };
-
-/** Dias civis entre duas datas "yyyy-MM-dd" (em UTC puro, sem o fuso do navegador). */
-export const diasEntre = (de: string, ate: string): number => Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86_400_000);

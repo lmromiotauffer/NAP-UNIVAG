@@ -54,7 +54,6 @@ public sealed class ValidadorCarimboSeguranca(NapDbContext db, IDistributedCache
 
         var atual = await doBanco();
         if (atual is null) return null;
-        // ponytail: se a revogação remover a chave entre a leitura do banco acima e esta gravação, o valor antigo volta
         // ao cache e vale até o TTL (30 s). Mesmo limite da remoção que falha; reduzir o TTL se não for aceitável.
         try { await cache.SetStringAsync(chave, atual, Validade, ct); }
         catch (Exception e) when (e is not OperationCanceledException)
@@ -70,7 +69,6 @@ public sealed class ValidadorCarimboSeguranca(NapDbContext db, IDistributedCache
     /// <summary>Descarta o carimbo em cache do usuário (carimbo rotacionado ou situação alterada).</summary>
     public Task EsquecerUsuarioAsync(Guid usuarioId, CancellationToken ct) => RemoverAsync(Chave(usuarioId), ct);
 
-    // ponytail: se a remoção falhar, a sessão antiga vale até o TTL (30 s); reduzir o TTL se isso não for aceitável.
     private async Task RemoverAsync(string chave, CancellationToken ct)
     {
         try { await cache.RemoveAsync(chave, ct); }

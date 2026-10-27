@@ -39,6 +39,8 @@ namespace Nap.Infrastructure;
 
 public static class DependencyInjection
 {
+    public const string MensagemRedisNaoConfigurado = "Connection string 'Redis' não configurada.";
+
     /// <summary>Persistência, Identity, sessão/JWT e Redis. A autenticação JwtBearer é configurada pela Api.</summary>
     public static IServiceCollection AdicionarInfrastructure(this IServiceCollection servicos, IConfiguration configuracao)
     {
@@ -47,6 +49,8 @@ public static class DependencyInjection
             .ValidateOnStart();
         servicos.AddOptions<OpcoesArquivos>().Bind(configuracao.GetSection("Nap:Arquivos"))
             .Validate(o => o.LimiteBytes > 0, "Nap:Arquivos:LimiteBytes deve ser maior que zero.")
+            // O teto do corpo multipart em DocumentosController é fixo (6 MiB); acima de 5 MiB o upload seria recusado antes do limite.
+            .Validate(o => o.LimiteBytes <= 5 * 1024 * 1024, "Nap:Arquivos:LimiteBytes não pode passar de 5 MiB (teto do corpo em DocumentosController).")
             .Validate(o => !string.IsNullOrWhiteSpace(o.Diretorio), "Nap:Arquivos:Diretorio deve ser configurado.")
             .ValidateOnStart();
         // A Application recebe a instância (sem dependência de IOptions); os validadores acima rodam no primeiro .Value.
@@ -73,12 +77,12 @@ public static class DependencyInjection
             })
             .AddEntityFrameworkStores<NapDbContext>();
 
-        // Uma única conexão Redis, compartilhada pelo cache de consultas e pelo IDistributedCache. A string é exigida já
-        // no registro: sem ela, o cache de consultas (singleton) não resolveria e toda escrita e o painel dariam 500.
-        var stringRedis = configuracao.GetConnectionString("Redis")
-            ?? throw new InvalidOperationException("Connection string 'Redis' não configurada.");
-        servicos.AddSingleton<IConnectionMultiplexer>(_ =>
+        // Uma única conexão Redis, compartilhada pelo cache de consultas e pelo IDistributedCache. A string é lida só ao resolver
+        // (a configuração dos testes entra depois deste registro); a partida exige a string em Program.cs.
+        servicos.AddSingleton<IConnectionMultiplexer>(sp =>
         {
+            var stringRedis = sp.GetRequiredService<IConfiguration>().GetConnectionString("Redis")
+                ?? throw new InvalidOperationException(MensagemRedisNaoConfigurado);
             var redis = ConfigurationOptions.Parse(stringRedis);
             redis.AbortOnConnectFail = false;
             // Desconectado, falha na hora (sem fila de 5 s): o chamador cai no banco/fonte em vez de travar a requisição.

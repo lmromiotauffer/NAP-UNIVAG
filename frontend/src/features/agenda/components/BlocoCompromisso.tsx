@@ -51,7 +51,7 @@ export function BlocoCompromisso({
       onClick={aoAbrir}
       style={posicao}
       className={cn(
-        "absolute overflow-hidden rounded-md px-1 py-1 text-left text-xs leading-tight ring-1 ring-superficie transition-[filter] duration-150 hover:brightness-95 focus-visible:z-20 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primaria",
+        "absolute cursor-pointer overflow-hidden rounded-md px-1 py-1 text-left text-xs leading-tight ring-1 ring-superficie transition-[filter] duration-150 hover:brightness-95 focus-visible:z-20 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primaria",
         CORES[estilo.variante],
         PADROES[estilo.padrao],
         lembrete && "z-10 min-h-6 rounded-full py-0.5",

@@ -86,12 +86,14 @@ export function VersaoPeiPage() {
             <h2 id="titulo-conteudo" className="m-0 font-titulo text-base font-bold">
               Conteúdo
             </h2>
-            <ConteudoPeiForm
-              key={`${v.id}-${v.estado}-${geracao}`}
-              versao={v}
-              aoEnviado={() => toast.sucesso("Versão enviada para revisão.")}
-              aoConflito={() => void detalhe.refetch().then(() => setGeracao((g) => g + 1))}
-            />
+            {/* Após "Recarregar valores atuais" o formulário remontado chega com o surgir: os campos trocaram de conteúdo. A primeira montagem já anima pelo <main>. */}
+            <div key={`${v.id}-${v.estado}-${geracao}`} className={geracao > 0 ? "animate-surgir" : undefined}>
+              <ConteudoPeiForm
+                versao={v}
+                aoEnviado={() => toast.sucesso("Versão enviada para revisão.")}
+                aoConflito={() => void detalhe.refetch().then(() => setGeracao((g) => g + 1))}
+              />
+            </div>
           </section>
         ) : (
           <>

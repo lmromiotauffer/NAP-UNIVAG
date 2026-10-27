@@ -28,12 +28,9 @@ public class RegistrarAtendimentoValidator : AbstractValidator<RegistrarAtendime
         {
             RuleFor(x => x.AlunoId).NotNull().WithMessage("Informe o aluno.");
             RuleFor(x => x.Inicio).NotNull().WithMessage("Informe o início.");
-            RuleFor(x => x.Fim).NotNull().WithMessage("Informe o término.")
-                .Must((x, fim) => fim is null || x.Inicio is null || fim > x.Inicio)
-                .WithMessage("O horário de término deve ser posterior ao de início.")
-                .Must((x, fim) => fim is null || x.Inicio is null || fim - x.Inicio <= TimeSpan.FromHours(12))
-                .WithMessage("A duração não pode ultrapassar 12 horas.");
-            RuleFor(x => x.JustificativaAvulso).NotEmpty().WithMessage("Informe a justificativa do atendimento avulso.");
+            RuleFor(x => x.Fim).NotNull().WithMessage("Informe o término.").IntervaloValido(x => x.Inicio);
+            RuleFor(x => x.JustificativaAvulso).NotEmpty().WithMessage("Informe a justificativa do atendimento avulso.")
+                .Must(j => j is null || j.Trim().Length is >= 5 and <= 500).WithMessage("A justificativa deve ter de 5 a 500 caracteres.");
         });
     }
 }
@@ -63,7 +60,7 @@ public sealed class RegistrarAtendimentoHandler(IValidator<RegistrarAtendimentoC
         {
             var compromisso = await agenda.ObterAsync(compromissoId, tct) ?? throw new NotFoundException("Compromisso");
             if (!usuario.EhCoordenacao() && compromisso.ProfissionalId != usuario.Id) throw new ForbiddenException();
-            await fechamento.ExigirSemanaAbertaAsync(compromisso.ProfissionalId, compromisso.Intervalo.Inicio, tct);
+            await fechamento.ExigirSemanaAbertaAsync(compromisso.ProfissionalId, compromisso.Intervalo, tct);
             if (await atendimentos.ExisteParaCompromissoAsync(compromissoId, tct))
                 throw new ConflictException("Este agendamento já possui atendimento registrado");
 
@@ -88,7 +85,7 @@ public sealed class RegistrarAtendimentoHandler(IValidator<RegistrarAtendimentoC
 
         return await uow.EmTransacaoAsync(async tct =>
         {
-            await fechamento.ExigirSemanaAbertaAsync(profissionalId, intervalo.Inicio, tct);
+            await fechamento.ExigirSemanaAbertaAsync(profissionalId, intervalo, tct);
             await agenda.GarantirSemConflitoAsync(profissionalId, alunoId, intervalo, null, true, tct);
             await escala.ExigirDentroDaEscalaAsync(profissionalId, comando.Inicio!.Value, tct);
             atendimentos.Adicionar(atendimento);

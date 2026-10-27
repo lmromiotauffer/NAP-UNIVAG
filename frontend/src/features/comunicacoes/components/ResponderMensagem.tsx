@@ -36,7 +36,7 @@ export function ResponderMensagem({ mensagemId, aoConcluir, aoCancelar }: { mens
 
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-3">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       <Field rotulo="Resposta" erro={errors.corpo?.message} obrigatorio>
         {/* O botão "Responder" some ao abrir o formulário: o foco segue para o campo em vez de cair no body. */}
         <Textarea autoFocus maxLength={10000} className="min-h-32" {...register("corpo")} />

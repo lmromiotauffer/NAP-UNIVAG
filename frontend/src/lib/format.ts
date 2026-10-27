@@ -13,18 +13,21 @@ export const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 type Ausente = null | undefined;
 
+// Criados uma vez: montar um Intl.DateTimeFormat é caro e estas funções rodam em toda linha de tabela.
+const FORMATO_PARTES = new Intl.DateTimeFormat(LOCALE, {
+  timeZone: FUSO,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+const FORMATO_DESLOCAMENTO = new Intl.DateTimeFormat("en-US", { timeZone: FUSO, timeZoneName: "longOffset" });
+
 function partes(iso: string): Record<string, string> {
-  const fmt = new Intl.DateTimeFormat(LOCALE, {
-    timeZone: FUSO,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  });
   const resultado: Record<string, string> = {};
-  for (const p of fmt.formatToParts(new Date(iso))) resultado[p.type] = p.value;
+  for (const p of FORMATO_PARTES.formatToParts(new Date(iso))) resultado[p.type] = p.value;
   return resultado;
 }
 
@@ -55,6 +58,11 @@ export function formatarHora(iso: string | Ausente): string {
 export function formatarDataHora(iso: string | Ausente): string {
   if (iso == null) return AUSENTE;
   return `${formatarData(iso)} ${formatarHora(iso)}`;
+}
+
+/** "8h00–9h30": faixa de horário de um compromisso, atendimento ou atividade. */
+export function formatarIntervalo(inicio: string, fim: string): string {
+  return `${formatarHora(inicio)}–${formatarHora(fim)}`;
 }
 
 /** "out" para mês 10 (1–12), sem passar por Date. */
@@ -126,6 +134,22 @@ export function somarDias(dia: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Dias civis de `de` até `ate` (negativo se `ate` vem antes). */
+export function diasEntre(de: string, ate: string): number {
+  return Math.round((utc(ate).getTime() - utc(de).getTime()) / 86_400_000);
+}
+
+/** "AAAA-MM-DD" de um dia que existe: Date.parse aceita "2026-02-30" (rola para março), a ida e volta pelo calendário não. */
+export function diaValido(dia: string): boolean {
+  return DIA.test(dia) && !Number.isNaN(Date.parse(dia)) && somarDias(dia, 0) === dia;
+}
+
+/** "07:00" ou "07:00:00" → minutos desde a meia-noite. */
+export function minutosDoDia(hora: string): number {
+  const [h = 0, m = 0] = hora.split(":").map(Number);
+  return h * 60 + m;
+}
+
 /** Segunda-feira da semana de um dia civil (o calendário institucional, não o do navegador). */
 export function segundaDoDia(dia: string): string {
   return somarDias(dia, -((utc(dia).getUTCDay() + 6) % 7));
@@ -139,16 +163,15 @@ export function horaCivil(iso: string): string {
 
 /** Dia civil + "HH:mm" de Cuiabá → ISO com o deslocamento do fuso naquele dia (ex.: "-04:00"). */
 export function instanteCivil(dia: string, hora: string): string {
-  const nome = new Intl.DateTimeFormat("en-US", { timeZone: FUSO, timeZoneName: "longOffset" })
-    .formatToParts(new Date(`${dia}T12:00:00Z`))
+  const nome = FORMATO_DESLOCAMENTO.formatToParts(new Date(`${dia}T12:00:00Z`))
     .find((p) => p.type === "timeZoneName")?.value;
   const deslocamento = nome === "GMT" || !nome ? "+00:00" : nome.slice(3);
   return `${dia}T${hora}:00${deslocamento}`;
 }
 
-/** "28 set – 2 out 2026" (segunda a sexta). */
-export function formatarSemana(segunda: string): string {
-  const sexta = somarDias(segunda, 4);
+/** "28 set – 2 out 2026". Agenda: segunda a sexta. Painel: segunda a domingo (`dias = 6`), a mesma semana da produção. */
+export function formatarSemana(segunda: string, dias = 4): string {
+  const sexta = somarDias(segunda, dias);
   const [a1, m1, d1] = segunda.split("-").map(Number) as [number, number, number];
   const [a2, m2, d2] = sexta.split("-").map(Number) as [number, number, number];
   const fim = `${d2} ${MESES[m2 - 1]} ${a2}`;

@@ -16,6 +16,8 @@ public sealed class CriarNovaVersaoPeiHandler(IValidator<CriarNovaVersaoPeiComma
     /// <summary>Mesma mensagem da violação do índice de versão aberta (corrida entre duas criações).</summary>
     public const string MensagemVersaoAberta = "Já existe uma versão em elaboração.";
 
+    public const string MensagemVersaoAssinada = "Há uma versão assinada aguardando publicação; publique-a antes de criar outra.";
+
     public async Task<Guid> Handle(CriarNovaVersaoPeiCommand comando, CancellationToken ct = default)
     {
         AutorizacaoPei.ExigirAcesso(usuario);
@@ -24,6 +26,7 @@ public sealed class CriarNovaVersaoPeiHandler(IValidator<CriarNovaVersaoPeiComma
         if (!AutorizacaoPei.PodeElaborar(usuario)) throw new ForbiddenException();
         var pei = await peis.ObterAsync(comando.PeiId, ct) ?? throw new NotFoundException("PEI");
         if (pei.VersaoAberta is not null) throw new ConflictException(MensagemVersaoAberta);
+        if (pei.ImpedeNovaVersao) throw new ConflictException(MensagemVersaoAssinada);
 
         var versao = pei.NovaVersao(usuario.Id, relogio.Agora);
         auditoria.Registrar("pei.versao.criar", "VersaoPei", versao.Id);

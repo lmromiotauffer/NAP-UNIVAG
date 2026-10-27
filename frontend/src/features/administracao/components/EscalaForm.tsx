@@ -8,13 +8,11 @@ import { Field } from "../../../components/ui/Field";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { tratarErro } from "../../../lib/api";
-import { DIA, DIAS_ESCALA } from "../../../lib/format";
+import { DIA, DIAS_ESCALA, HORA, minutosDoDia } from "../../../lib/format";
 import { useProfissionais } from "../../compartilhado/catalogos";
 import { useCriarEscala } from "../hooks/useAdministracao";
 import { previaEscala } from "./previaEscala";
 
-const HORA = /^\d{2}:\d{2}(:\d{2})?$/;
-const minutos = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
 
 const esquema = z
   .object({
@@ -33,10 +31,10 @@ const esquema = z
     d.dias.forEach((x, i) => {
       if (!x.atende) return;
       if (!HORA.test(x.inicio)) ctx.addIssue({ code: "custom", path: ["dias", i, "inicio"], message: "Informe o horário de início." });
-      else if (minutos(x.inicio) % 15 !== 0) ctx.addIssue({ code: "custom", path: ["dias", i, "inicio"], message: "Use horários em múltiplos de 15 minutos." });
+      else if (minutosDoDia(x.inicio) % 15 !== 0) ctx.addIssue({ code: "custom", path: ["dias", i, "inicio"], message: "Use horários em múltiplos de 15 minutos." });
       if (!HORA.test(x.fim)) ctx.addIssue({ code: "custom", path: ["dias", i, "fim"], message: "Informe o horário de fim." });
-      else if (minutos(x.fim) % 15 !== 0) ctx.addIssue({ code: "custom", path: ["dias", i, "fim"], message: "Use horários em múltiplos de 15 minutos." });
-      else if (HORA.test(x.inicio) && minutos(x.fim) <= minutos(x.inicio)) ctx.addIssue({ code: "custom", path: ["dias", i, "fim"], message: "O fim deve ser depois do início." });
+      else if (minutosDoDia(x.fim) % 15 !== 0) ctx.addIssue({ code: "custom", path: ["dias", i, "fim"], message: "Use horários em múltiplos de 15 minutos." });
+      else if (HORA.test(x.inicio) && minutosDoDia(x.fim) <= minutosDoDia(x.inicio)) ctx.addIssue({ code: "custom", path: ["dias", i, "fim"], message: "O fim deve ser depois do início." });
     });
   });
 type Dados = z.infer<typeof esquema>;
@@ -89,8 +87,8 @@ export function EscalaForm({ aoConcluir, aoCancelar }: { aoConcluir: () => void;
 
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
-      {profissionais.isError && <Alert variante="urgente">Não foi possível carregar os profissionais. Feche e tente novamente.</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
+      {profissionais.isError && <Alert variante="urgente" className="animate-surgir">Não foi possível carregar os profissionais. Feche e tente novamente.</Alert>}
       <Field rotulo="Profissional" erro={errors.profissionalId?.message} obrigatorio>
         <Select {...register("profissionalId")}>
           <option value="">{profissionais.isPending ? "Carregando…" : "Selecione"}</option>
@@ -134,7 +132,7 @@ export function EscalaForm({ aoConcluir, aoCancelar }: { aoConcluir: () => void;
                 </label>
               </div>
               {erroLinha && (
-                <p role="alert" className="text-xs text-urgente">
+                <p role="alert" className="animate-surgir text-xs text-urgente">
                   {nome}: {erroLinha}
                 </p>
               )}
@@ -142,7 +140,7 @@ export function EscalaForm({ aoConcluir, aoCancelar }: { aoConcluir: () => void;
           );
         })}
         {errors.dias?.message && (
-          <p role="alert" className="text-xs text-urgente">
+          <p role="alert" className="animate-surgir text-xs text-urgente">
             {errors.dias.message}
           </p>
         )}

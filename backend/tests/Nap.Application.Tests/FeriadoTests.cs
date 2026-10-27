@@ -2,9 +2,11 @@ using Nap.Application.Comum;
 using Nap.Application.Features.Agenda;
 using Nap.Application.Features.Agenda.Commands;
 using Nap.Application.Features.Agenda.Queries;
+using Nap.Application.Features.Producao;
 using Nap.Application.Tests.Fakes;
 using Nap.Domain.Agenda;
 using Nap.Domain.Comum;
+using Nap.Domain.Producao;
 
 namespace Nap.Application.Tests;
 
@@ -15,11 +17,14 @@ public class FeriadoTests
     private readonly AuditoriaFalsa _auditoria = new();
     private readonly UnidadeDeTrabalhoFalsa _uow = new();
     private readonly UsuarioAtualFalso _coord = new(Perfis.CoordenadorNap);
+    private readonly FechamentoRepositoryEmMemoria _fechamentos = new();
+
+    private ServicoFechamento Fechamento() => new(_fechamentos, new RelogioFixo());
 
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private CriarFeriadoHandler Criar(IUsuarioAtual? u = null) =>
-        new(new CriarFeriadoValidator(), _feriados, u ?? _coord, _auditoria, _uow);
+        new(new CriarFeriadoValidator(), _feriados, u ?? _coord, _auditoria, _uow, Fechamento());
 
     [Fact]
     public async Task Feriado_lista_conflitos_sem_alterar_nada()
@@ -39,6 +44,20 @@ public class FeriadoTests
     }
 
     [Fact]
+    public async Task Feriado_em_semana_fechada_e_recusado()
+    {
+        var f = FechamentoSemanal.Criar(Guid.NewGuid(), ServicoFechamento.SegundaDe(Data));
+        f.Fechar(Guid.NewGuid(), DateTimeOffset.UtcNow, Data.AddDays(14));
+        _fechamentos.Adicionar(f);
+
+        var ex = await Assert.ThrowsAsync<DomainException>(() => Criar().Handle(new CriarFeriadoCommand(Data, "Dia do Servidor"), Ct));
+        Assert.Equal(ServicoFechamento.MensagemPeriodoFechado, ex.Message);
+        Assert.Empty(_feriados.Feriados);
+        // A semana seguinte segue aberta.
+        await Criar().Handle(new CriarFeriadoCommand(Data.AddDays(7), "Dia do Servidor"), Ct);
+    }
+
+    [Fact]
     public async Task Feriado_duplicado_retorna_conflito()
     {
         await Criar().Handle(new CriarFeriadoCommand(Data, "Dia do Servidor"), Ct);
@@ -47,7 +66,7 @@ public class FeriadoTests
 
         // Depois de inativado, a data pode ser cadastrada de novo.
         var id = _feriados.Feriados.Single().Id;
-        await new InativarFeriadoHandler(_feriados, _coord, _auditoria, _uow).Handle(new InativarFeriadoCommand(id), Ct);
+        await new InativarFeriadoHandler(_feriados, _coord, _auditoria, _uow, Fechamento()).Handle(new InativarFeriadoCommand(id), Ct);
         Assert.Contains(("feriado.inativar", "Feriado", (Guid?)id), _auditoria.Registros);
         await Criar().Handle(new CriarFeriadoCommand(Data, "Outro"), Ct);
         Assert.Equal(2, _feriados.Feriados.Count);
@@ -61,9 +80,9 @@ public class FeriadoTests
         var ex = await Assert.ThrowsAsync<ValidationException>(() => Criar().Handle(new CriarFeriadoCommand(Data, "x"), Ct));
         Assert.Contains("descricao", ex.Erros.Keys);
         await Assert.ThrowsAsync<ForbiddenException>(() =>
-            new InativarFeriadoHandler(_feriados, new UsuarioAtualFalso(Perfis.Sip), _auditoria, _uow).Handle(new InativarFeriadoCommand(Guid.NewGuid()), Ct));
+            new InativarFeriadoHandler(_feriados, new UsuarioAtualFalso(Perfis.Sip), _auditoria, _uow, Fechamento()).Handle(new InativarFeriadoCommand(Guid.NewGuid()), Ct));
         await Assert.ThrowsAsync<NotFoundException>(() =>
-            new InativarFeriadoHandler(_feriados, _coord, _auditoria, _uow).Handle(new InativarFeriadoCommand(Guid.NewGuid()), Ct));
+            new InativarFeriadoHandler(_feriados, _coord, _auditoria, _uow, Fechamento()).Handle(new InativarFeriadoCommand(Guid.NewGuid()), Ct));
         Assert.Empty(_feriados.Feriados);
     }
 

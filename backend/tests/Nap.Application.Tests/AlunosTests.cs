@@ -123,7 +123,7 @@ public class AlunosTests
     public async Task Consulta_da_ficha_e_auditada()
     {
         var id = Guid.NewGuid();
-        _consultas.Ficha = new AlunoFichaDto(id, "Maria", "2024001", _curso, "Direito", 3, _profissional, "Ana", SituacaoAluno.Ativo,
+        _consultas.Ficha = new AlunoFichaDto(id, "Maria", "2024001", true, _curso, "Direito", 3, _profissional, "Ana", SituacaoAluno.Ativo,
             new DateOnly(2026, 2, 1), null, null, null, "v1");
         var h = new ObterAlunoHandler(new ObterAlunoValidator(), _consultas, EquipeNap(), _auditoria, _uow);
 
@@ -148,7 +148,7 @@ public class AlunosTests
     private Guid FichaNoEscopo()
     {
         var id = Guid.NewGuid();
-        _consultas.Ficha = new AlunoFichaDto(id, "Maria", "2024001", _curso, "Direito", 3, _profissional, "Ana", SituacaoAluno.Ativo,
+        _consultas.Ficha = new AlunoFichaDto(id, "Maria", "2024001", true, _curso, "Direito", 3, _profissional, "Ana", SituacaoAluno.Ativo,
             new DateOnly(2026, 2, 1), null, null, null, "v1");
         return id;
     }
@@ -179,6 +179,18 @@ public class AlunosTests
 
         Assert.Empty(pagina.Itens);
         Assert.Single(_auditoria.Registros);
+    }
+
+    [Fact]
+    public async Task Linha_do_tempo_alem_do_teto_e_400()
+    {
+        var h = new ListarLinhaDoTempoHandler(new ListarLinhaDoTempoValidator(), _consultas, EquipeNap(), _auditoria, _uow);
+
+        var erro = await Assert.ThrowsAsync<ValidationException>(() =>
+            h.Handle(new ListarLinhaDoTempoQuery(FichaNoEscopo(), 21, 100), TestContext.Current.CancellationToken));
+
+        Assert.True(erro.Erros.ContainsKey("pagina"));
+        Assert.Empty(_auditoria.Registros);
     }
 
     [Fact]
@@ -281,8 +293,23 @@ public class AlunosTests
         Assert.Contains(_auditoria.Registros, r => r.Acao == "aluno.transferir" && r.RecursoId == id);
     }
 
-    private AtualizarAlunoHandler AtualizarHandler() =>
-        new(new AtualizarAlunoValidator(), _repo, new UsuarioQueriesFalso(_profissional), EquipeNap(), _auditoria, _uow, _cache);
+    private AtualizarAlunoHandler AtualizarHandler(UsuarioQueriesFalso? usuarios = null) =>
+        new(new AtualizarAlunoValidator(), _repo, usuarios ?? new UsuarioQueriesFalso(_profissional), EquipeNap(), _auditoria, _uow, _cache);
+
+    [Fact]
+    public async Task Responsavel_inalterado_e_inativo_ainda_permite_editar_mas_trocar_exige_ativo()
+    {
+        var id = await CriarHandler(EquipeNap(), _profissional).Handle(Comando(), TestContext.Current.CancellationToken);
+        var semAtivos = new UsuarioQueriesFalso(); // o responsável foi desativado depois do cadastro
+
+        await AtualizarHandler(semAtivos).Handle(new AtualizarAlunoCommand(id, "Maria Souza", 3, null, null, _profissional, true, "v1"),
+            TestContext.Current.CancellationToken);
+        Assert.Equal("Maria Souza", Assert.Single(_repo.Alunos).NomeCompleto);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => AtualizarHandler(semAtivos).Handle(
+            new AtualizarAlunoCommand(id, "Maria Souza", 3, null, null, Guid.NewGuid(), true, "v1"), TestContext.Current.CancellationToken));
+        Assert.Contains("profissionalResponsavelId", ex.Erros.Keys);
+    }
 
     [Fact]
     public async Task Atualizar_aluno_sem_mudanca_com_versao_antiga_lanca_conflito_e_nao_salva()
@@ -292,7 +319,7 @@ public class AlunosTests
         var salvamentosAntes = _uow.Salvamentos;
         _uow.VersaoAtual = "v2";
         await Assert.ThrowsAsync<ConflictException>(() => AtualizarHandler().Handle(new AtualizarAlunoCommand(id, aluno.NomeCompleto,
-            aluno.Semestre, aluno.NecessidadesEducacionais, aluno.ObservacoesAcademicas, aluno.ProfissionalResponsavelId, "v1"),
+            aluno.Semestre, aluno.NecessidadesEducacionais, aluno.ObservacoesAcademicas, aluno.ProfissionalResponsavelId, aluno.MatriculaAtiva, "v1"),
             TestContext.Current.CancellationToken));
         Assert.Equal(salvamentosAntes, _uow.Salvamentos);
     }
@@ -301,11 +328,12 @@ public class AlunosTests
     public async Task Atualizar_aluno_altera_dados_e_inexistente_gera_not_found()
     {
         var id = await CriarHandler(EquipeNap(), _profissional).Handle(Comando(), TestContext.Current.CancellationToken);
-        await AtualizarHandler().Handle(new AtualizarAlunoCommand(id, "Maria Souza", 5, "Necessidade X", null, _profissional, "v1"), TestContext.Current.CancellationToken);
+        await AtualizarHandler().Handle(new AtualizarAlunoCommand(id, "Maria Souza", 5, "Necessidade X", null, _profissional, false, "v1"), TestContext.Current.CancellationToken);
         var aluno = Assert.Single(_repo.Alunos);
         Assert.Equal("Maria Souza", aluno.NomeCompleto);
         Assert.Equal(5, aluno.Semestre);
+        Assert.False(aluno.MatriculaAtiva);
         await Assert.ThrowsAsync<NotFoundException>(() =>
-            AtualizarHandler().Handle(new AtualizarAlunoCommand(Guid.NewGuid(), "Maria Souza", 5, null, null, _profissional, "v1"), TestContext.Current.CancellationToken));
+            AtualizarHandler().Handle(new AtualizarAlunoCommand(Guid.NewGuid(), "Maria Souza", 5, null, null, _profissional, true, "v1"), TestContext.Current.CancellationToken));
     }
 }

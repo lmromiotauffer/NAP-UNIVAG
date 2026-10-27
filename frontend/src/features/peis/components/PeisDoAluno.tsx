@@ -93,7 +93,7 @@ function CriarPeiDialog({ alunoId, aoFechar }: { alunoId: string; aoFechar: () =
             ))}
           </Select>
         </Field>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field rotulo="Início da vigência" erro={errors.vigenciaInicio?.message} obrigatorio>
             <Input type="date" {...register("vigenciaInicio")} />
           </Field>
@@ -103,7 +103,7 @@ function CriarPeiDialog({ alunoId, aoFechar }: { alunoId: string; aoFechar: () =
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <Button variante="secundaria" onClick={aoFechar} disabled={isSubmitting}>
-            Voltar
+            Cancelar
           </Button>
           <Button type="submit" carregando={isSubmitting}>
             Criar PEI
@@ -132,15 +132,15 @@ export function PeisDoAluno({ alunoId }: { alunoId: string }) {
   else if (lista.data.length === 0) corpo = <EmptyState icone={<NotebookPen />} titulo="Nenhum PEI" descricao="Os PEIs deste aluno aparecem aqui." />;
   else
     corpo = (
-      // Substitui o skeleton: chega com o surgir padrão.
-      <div className="flex animate-surgir flex-col gap-4">
+      // Sem animação de entrada: substitui o skeleton já visível; quem anima é o painel da aba.
+      <div className="flex flex-col gap-4">
         {lista.data.map((p) => (
           <div key={p.id} className="flex flex-col gap-2">
             <div className="text-denso text-suave">Responsável: {p.responsavel}</div>
             <ul className="m-0 flex list-none flex-col gap-2 p-0">
               {p.versoes.map((v) => (
                 <li key={v.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-bloco border border-borda px-4 py-2.5 text-corpo">
-                  <Link to={`/peis/versoes/${v.id}`} className="font-semibold text-primaria hover:underline">
+                  <Link to={`/peis/versoes/${v.id}`} className="inline-flex items-center rounded-sm font-semibold text-primaria hover:underline pointer-coarse:min-h-11">
                     Versão {v.numero}
                   </Link>
                   <Badge variante={VARIANTE_ESTADO[v.estado]}>{ROTULO_ESTADO[v.estado]}</Badge>

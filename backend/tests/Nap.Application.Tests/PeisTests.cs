@@ -57,7 +57,7 @@ public class PeisTests
         v.EnviarParaRevisao(agora);
         if (alvo == EstadoVersaoPei.EmRevisao) return;
         var hash = CalculadoraHashPei.Calcular(v.Conteudo);
-        v.AprovarRevisao(_coord.Id, hash, agora);
+        v.AprovarRevisao(_coord.Id, agora);
         if (alvo == EstadoVersaoPei.AguardandoAssinaturas) return;
         v.RegistrarAssinatura(PapelAssinatura.Profissional, _prof.Id, "Ana Beatriz", hash, "e1", agora);
         v.RegistrarAssinatura(PapelAssinatura.Aluno, null, "Maria da Silva", hash, "e2", agora);
@@ -93,7 +93,7 @@ public class PeisTests
         new(new PublicarPeiValidator(), _peis, _alunos, _usuarios, _mensagens, u, _relogio, _auditoria, _uow, _cache);
 
     private RegistrarCienciaPeiHandler Ciencia(IUsuarioAtual u) =>
-        new(new RegistrarCienciaPeiValidator(), _peis, u, _relogio, _auditoria, _uow, _cache);
+        new(new RegistrarCienciaPeiValidator(), _peis, _alunos, u, _relogio, _auditoria, _uow, _cache);
 
     private CriarNovaVersaoPeiHandler NovaVersao(IUsuarioAtual u) =>
         new(new CriarNovaVersaoPeiValidator(), _peis, u, _relogio, _auditoria, _uow, _cache);
@@ -368,6 +368,18 @@ public class PeisTests
     }
 
     [Fact]
+    public async Task Ciencia_do_coordenador_do_curso_atual_apos_transferencia()
+    {
+        var publicada = Semear(EstadoVersaoPei.Publicada);
+        var cursoNovo = Guid.NewGuid();
+        _aluno.TransferirCurso(cursoNovo, new DateOnly(2026, 9, 1), "Mudou de curso", _prof.Id, DateTimeOffset.UtcNow);
+
+        await Ciencia(new UsuarioAtualFalso(Perfis.CoordenadorCurso, cursoNovo)).Handle(new RegistrarCienciaPeiCommand(publicada.Id), Ct);
+
+        Assert.Single(publicada.Ciencias);
+    }
+
+    [Fact]
     public async Task Ciencia_repetida_nao_duplica()
     {
         var v = Semear(EstadoVersaoPei.Publicada);
@@ -386,14 +398,14 @@ public class PeisTests
     {
         var v = Semear(EstadoVersaoPei.Publicada);
         var uow = new UnidadeDeTrabalhoFalsa { ConflitoAoSalvar = "O registro foi alterado por outra pessoa. Recarregue e tente novamente" };
-        var handler = new RegistrarCienciaPeiHandler(new RegistrarCienciaPeiValidator(), _peis,
+        var handler = new RegistrarCienciaPeiHandler(new RegistrarCienciaPeiValidator(), _peis, _alunos,
             new UsuarioAtualFalso(Perfis.CoordenadorCurso, _curso), _relogio, _auditoria, uow, _cache);
 
         await Assert.ThrowsAsync<ConflictException>(() => handler.Handle(new RegistrarCienciaPeiCommand(v.Id), Ct));
 
         // Já a unicidade (outra requisição do mesmo coordenador gravou antes) é sucesso.
         var duplicada = new UnidadeDeTrabalhoFalsa { ConflitoAoSalvar = RegistrarCienciaPeiHandler.MensagemCienciaDuplicada };
-        await new RegistrarCienciaPeiHandler(new RegistrarCienciaPeiValidator(), _peis,
+        await new RegistrarCienciaPeiHandler(new RegistrarCienciaPeiValidator(), _peis, _alunos,
             new UsuarioAtualFalso(Perfis.CoordenadorCurso, _curso), _relogio, _auditoria, duplicada, _cache)
             .Handle(new RegistrarCienciaPeiCommand(Semear(EstadoVersaoPei.Publicada).Id), Ct);
     }
@@ -471,6 +483,18 @@ public class PeisTests
     }
 
     [Fact]
+    public async Task Nova_versao_com_versao_assinada_e_conflito()
+    {
+        var v = Semear(EstadoVersaoPei.Assinada);
+
+        var erro = await Assert.ThrowsAsync<ConflictException>(() =>
+            NovaVersao(_prof).Handle(new CriarNovaVersaoPeiCommand(v.PeiId), Ct));
+
+        Assert.Equal(CriarNovaVersaoPeiHandler.MensagemVersaoAssinada, erro.Message);
+        Assert.Single(PeiDe(v).Versoes);
+    }
+
+    [Fact]
     public async Task Descartar_so_rascunho_a_partir_da_v2()
     {
         var v1 = Semear(EstadoVersaoPei.Publicada);
@@ -478,8 +502,8 @@ public class PeisTests
         var v2Id = await NovaVersao(_prof).Handle(new CriarNovaVersaoPeiCommand(pei.Id), Ct);
         var v2 = pei.Versoes.Single(v => v.Id == v2Id);
 
-        await Assert.ThrowsAsync<DomainException>(() => Descartar(_prof).Handle(new DescartarVersaoPeiCommand(v1.Id), Ct));
-        await Descartar(_prof).Handle(new DescartarVersaoPeiCommand(v2Id), Ct);
+        await Assert.ThrowsAsync<DomainException>(() => Descartar(_prof).Handle(new DescartarVersaoPeiCommand(v1.Id, "v1"), Ct));
+        await Descartar(_prof).Handle(new DescartarVersaoPeiCommand(v2Id, "v1"), Ct);
 
         Assert.Equal([v1], pei.Versoes);
         Assert.Equal([v2], _peis.VersoesRemovidas);

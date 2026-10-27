@@ -60,7 +60,7 @@ export function TransferirCursoDialog({ aluno, aberto, aoFechar }: { aluno: Alun
 
   const opcoes = cursos.data?.filter((c) => c.ativo && c.id !== aluno.cursoId) ?? [];
   return (
-    <Modal aberto={aberto} aoFechar={fechar} titulo="Transferir de curso" bloqueado={isSubmitting}>
+    <Modal aberto={aberto} aoFechar={fechar} titulo="Transferir curso" bloqueado={isSubmitting}>
       <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
         {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
         {cursos.isError && <Alert variante="urgente" className="animate-surgir">Não foi possível carregar os cursos. Feche e tente novamente.</Alert>}
@@ -85,7 +85,7 @@ export function TransferirCursoDialog({ aluno, aberto, aoFechar }: { aluno: Alun
         </Field>
         <div className="flex flex-wrap justify-end gap-2">
           <Button variante="secundaria" onClick={fechar} disabled={isSubmitting}>
-            Cancelar
+            Voltar
           </Button>
           <Button type="submit" carregando={isSubmitting}>
             Transferir

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Alert } from "../../../components/ui/Alert";
 import { classeSecao } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
+import { Carregando } from "../../../components/ui/Carregando";
 import { ErrorState } from "../../../components/ui/ErrorState";
 import { Field } from "../../../components/ui/Field";
 import { Input } from "../../../components/ui/Input";
@@ -71,7 +72,7 @@ function FormAlertas({ dados, aoConflito }: { dados: ConfiguracaoAlertas; aoConf
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
       <p className="m-0 text-sm text-suave">Os limites valem para o painel, os alertas e o prazo dos encaminhamentos.</p>
       {erroGeral && (
-        <Alert variante="urgente" className="flex flex-wrap items-center justify-between gap-2">
+        <Alert variante="urgente" className="flex animate-surgir flex-wrap items-center justify-between gap-2">
           <span>{erroGeral}</span>
           {conflito && (
             <Button tamanho="sm" variante="secundaria" onClick={aoConflito}>
@@ -84,7 +85,7 @@ function FormAlertas({ dados, aoConflito }: { dados: ConfiguracaoAlertas; aoConf
         {GRUPOS.map((g) => (
           <section key={g.titulo} aria-labelledby={`alertas-${g.titulo}`} className={classeSecao}>
             <div>
-              <h2 id={`alertas-${g.titulo}`} className="m-0 text-base font-semibold">
+              <h2 id={`alertas-${g.titulo}`} className="m-0 font-titulo text-base font-bold">
                 {g.titulo}
               </h2>
               <p className="m-0 text-sm text-suave">{g.descricao}</p>
@@ -110,13 +111,17 @@ export function AlertasTab() {
   const alertas = useAlertasConfig();
   // Remonta o formulário com os valores do servidor (depois de um 409).
   const [geracao, setGeracao] = useState(0);
-  // Só o formulário que substitui o skeleton chega animado; vindo do cache ele monta junto com o painel da aba, que já anima.
-  const [veioDoSkeleton] = useState(alertas.isPending);
 
   if (alertas.isError) return <ErrorState erro={alertas.error} aoTentarNovamente={() => void alertas.refetch()} />;
-  if (!alertas.data) return <Skeleton className="h-96 rounded-secao" />;
+  if (!alertas.data)
+    return (
+      <Carregando rotulo="Carregando limites de alerta">
+        <Skeleton className="h-96 rounded-secao" />
+      </Carregando>
+    );
   return (
-    <div key={geracao} className={cn(veioDoSkeleton && "animate-surgir")}>
+    // Só o formulário remontado após "Recarregar valores atuais" chega animado; o que substitui o skeleton não (apagaria e surgiria de novo).
+    <div key={geracao} className={cn(geracao > 0 && "animate-surgir")}>
       <FormAlertas
         dados={alertas.data}
         aoConflito={() => {

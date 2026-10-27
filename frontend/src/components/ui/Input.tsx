@@ -2,7 +2,7 @@ import type { InputHTMLAttributes, Ref } from "react";
 import { cn } from "../../lib/cn";
 
 export const classeCampo =
-  "w-full rounded-md border bg-superficie px-3 py-2 text-sm transition-[border-color] pointer-coarse:min-h-11 text-texto placeholder:text-suave focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primaria disabled:opacity-60";
+  "w-full rounded-md border bg-superficie px-3 py-2 text-sm transition-[border-color,opacity] duration-150 pointer-coarse:min-h-11 text-texto placeholder:text-suave focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primaria disabled:opacity-60";
 
 export function bordaCampo(invalid?: boolean): string {
   return invalid ? "border-urgente" : "border-borda-campo";

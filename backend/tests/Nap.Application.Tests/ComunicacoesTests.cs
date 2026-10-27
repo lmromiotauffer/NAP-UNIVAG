@@ -87,9 +87,10 @@ public class ComunicacoesTests
     private DescartarRascunhoHandler DescartarRascunho(IUsuarioAtual u) => new(_repo, u, _uow);
     private ResponderMensagemHandler Responder(IUsuarioAtual u) =>
         new(new ResponderMensagemValidator(), _repo, _alunos, _encaminhamentos, _usuarios, u, new RelogioFixo(), _auditoria, _uow);
-    private MarcarMensagemLidaHandler MarcarLida(IUsuarioAtual u) => new(_repo, _notificacoes, u, new RelogioFixo(), _uow);
-    private ArquivarMensagemHandler Arquivar(IUsuarioAtual u) => new(_repo, u, new RelogioFixo(), _uow);
-    private DesarquivarMensagemHandler Desarquivar(IUsuarioAtual u) => new(_repo, u, _uow);
+    private MarcarMensagemLidaHandler MarcarLida(IUsuarioAtual u) =>
+        new(_repo, _alunos, _encaminhamentos, _notificacoes, u, new RelogioFixo(), _uow);
+    private ArquivarMensagemHandler Arquivar(IUsuarioAtual u) => new(_repo, _alunos, _encaminhamentos, u, new RelogioFixo(), _uow);
+    private DesarquivarMensagemHandler Desarquivar(IUsuarioAtual u) => new(_repo, _alunos, _encaminhamentos, u, _uow);
     private ListarDestinatariosHandler Destinatarios(IUsuarioAtual u) => new(_alunos, _encaminhamentos, _cursos, _usuarios, u);
 
     private static EnviarMensagemCommand Mensagem(Guid destinatario, Guid? alunoId = null, Guid? encaminhamentoId = null,
@@ -444,11 +445,42 @@ public class ComunicacoesTests
 
         await CampoInvalido("destinatarioId", () => Responder(prof).Handle(new(original, "Ainda por aqui?"), Ct));
 
-        // O coordenador antigo ainda responde à Equipe NAP; a resposta grava o curso atual do aluno.
-        var id = await Responder(coordenador).Handle(new(original, "Encerrando"), Ct);
-        var resposta = _repo.Mensagens.Single(m => m.Id == id);
-        Assert.Equal((prof.Id, _outroCurso), (resposta.DestinatarioId!.Value, resposta.CursoId!.Value));
-        Assert.Equal(2, _repo.Mensagens.Count);
+        // O coordenador antigo não alcança mais o aluno: o fio deixa de existir para ele, inclusive para responder.
+        await Assert.ThrowsAsync<NotFoundException>(() => Responder(coordenador).Handle(new(original, "Encerrando"), Ct));
+        Assert.Single(_repo.Mensagens);
+    }
+
+    [Fact]
+    public async Task Lida_e_arquivamento_apos_transferencia_tambem_somem_para_o_coordenador_antigo()
+    {
+        var coordenador = Eu(Perfis.CoordenadorCurso, _curso);
+        var id = await Enviar(Eu()).Handle(Mensagem(coordenador.Id, _aluno.Id), Ct);
+        _aluno.TransferirCurso(_outroCurso, Hoje, "Mudança de curso", Guid.NewGuid(), DateTimeOffset.UtcNow);
+
+        // A mesma regra da leitura (404), não só a de participante.
+        await Assert.ThrowsAsync<NotFoundException>(() => MarcarLida(coordenador).Handle(new(id), Ct));
+        await Assert.ThrowsAsync<NotFoundException>(() => Arquivar(coordenador).Handle(new(id), Ct));
+        await Assert.ThrowsAsync<NotFoundException>(() => Desarquivar(coordenador).Handle(new(id), Ct));
+    }
+
+    [Fact]
+    public async Task Sip_nao_envia_nem_lista_destinatarios_so_com_curso()
+    {
+        var sip = Eu(Perfis.Sip);
+        // Só com curso, o SIP não alcança a mensagem depois (a leitura exige encaminhamento SIP ou mensagem sem vínculo).
+        await CampoInvalido("cursoId", () => Enviar(sip).Handle(Mensagem(Usuario(Perfis.CoordenadorCurso, _curso), cursoId: _curso), Ct));
+        await CampoInvalido("cursoId", () => Destinatarios(sip).Handle(new(CursoId: _curso), Ct));
+        Assert.Empty(_repo.Mensagens);
+    }
+
+    [Fact]
+    public async Task Coordenador_antigo_nao_ve_o_aluno_pelo_encaminhamento()
+    {
+        var coordenador = Eu(Perfis.CoordenadorCurso, _curso);
+        var encaminhamento = Encaminhar(_aluno, DestinoEncaminhamento.CoordenacaoCurso);
+        _aluno.TransferirCurso(_outroCurso, Hoje, "Mudança de curso", Guid.NewGuid(), DateTimeOffset.UtcNow);
+
+        await CampoInvalido("alunoId", () => Destinatarios(coordenador).Handle(new(null, encaminhamento.Id), Ct));
     }
 
     [Fact]
@@ -562,6 +594,10 @@ public class ComunicacoesTests
         var comSip = await Destinatarios(eu).Handle(new(cenarios[2].AlunoId, cenarios[2].EncaminhamentoId), Ct);
         Assert.Contains(comSip, d => d.Perfil == Perfis.Sip);
         Assert.Single(comSip, d => d.Perfil == Perfis.CoordenadorCurso);
+        // Só com curso: a lista recebe o curso e já exclui quem o envio recusaria (SIP e coordenadores de outros cursos).
+        var soCurso = await Destinatarios(eu).Handle(new(CursoId: _curso), Ct);
+        Assert.DoesNotContain(soCurso, d => d.Perfil == Perfis.Sip);
+        Assert.Single(soCurso, d => d.Perfil == Perfis.CoordenadorCurso);
     }
 
     [Fact]
@@ -571,12 +607,31 @@ public class ComunicacoesTests
         await CampoInvalido("alunoId", () => Destinatarios(sip).Handle(new(_aluno.Id), Ct));
     }
 
-    /// <summary>Só para os casos de Gestão, que são barrados antes de qualquer consulta.</summary>
+    /// <summary>Só para os casos de Gestão, que são barrados antes de qualquer consulta.</summary>
+
+    [Fact]
+    public void Resposta_sem_texto_ou_longa_demais_e_erro_no_campo_corpo()
+    {
+        var validador = new ResponderMensagemValidator();
+        Assert.Contains(validador.Validate(new ResponderMensagemCommand(Guid.NewGuid(), "")).Errors, e => e.PropertyName == "Corpo");
+        Assert.Contains(validador.Validate(new ResponderMensagemCommand(Guid.NewGuid(), new string('a', 10001))).Errors,
+            e => e.PropertyName == "Corpo");
+        Assert.True(validador.Validate(new ResponderMensagemCommand(Guid.NewGuid(), "Obrigado")).IsValid);
+    }
+
+    [Fact]
+    public void Rascunho_de_envio_de_pei_e_recusado_como_no_envio()
+    {
+        Assert.Contains(new CriarRascunhoValidator().Validate(new CriarRascunhoCommand(TipoMensagem.EnvioPei, "Assunto", "Corpo",
+            null, null, null, null)).Errors, e => e.PropertyName == "Tipo");
+        Assert.Contains(new AtualizarRascunhoValidator().Validate(new AtualizarRascunhoCommand(Guid.NewGuid(), TipoMensagem.EnvioPei,
+            "Assunto", "Corpo", null, null, null, null, "v1")).Errors, e => e.PropertyName == "Tipo");
+    }
     private sealed class ComunicacaoQueriesNaoUsada : IComunicacaoQueries
     {
-        public Task<PagedResult<MensagemListaDto>> ListarAsync(Guid usuarioId, CaixaMensagens caixa, string? busca, Guid? alunoId,
+        public Task<PagedResult<MensagemListaDto>> ListarAsync(IUsuarioAtual leitor, CaixaMensagens caixa, string? busca, Guid? alunoId, Guid? encaminhamentoId,
             int pagina, int tamanho, CancellationToken ct) => throw new InvalidOperationException();
-        public Task<MensagemDetalheDto?> ObterAsync(Guid id, Guid usuarioId, CancellationToken ct) => throw new InvalidOperationException();
-        public Task<int> ContarNaoLidasAsync(Guid usuarioId, CancellationToken ct) => throw new InvalidOperationException();
+        public Task<MensagemDetalheDto?> ObterAsync(Guid id, IUsuarioAtual leitor, CancellationToken ct) => throw new InvalidOperationException();
+        public Task<int> ContarNaoLidasAsync(IUsuarioAtual leitor, CancellationToken ct) => throw new InvalidOperationException();
     }
 }

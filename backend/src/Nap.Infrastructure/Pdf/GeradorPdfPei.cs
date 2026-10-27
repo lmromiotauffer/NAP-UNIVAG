@@ -62,7 +62,8 @@ public sealed class GeradorPdfPei : IGeradorPdfPei
         {
             secao.AddParagraph($"{a.Nome} — {Papel(a.Papel)}").Format.Font.Bold = true;
             secao.AddParagraph($"Em {Instante(a.Em)} · método: {a.Metodo}");
-            secao.AddParagraph(m.AvisoAssinatura).Format.Font.Italic = true;
+            if (a.Metodo == ModeloPdfPei.MetodoDemonstrativo)
+                secao.AddParagraph(m.AvisoAssinatura).Format.Font.Italic = true;
         }
         if (m.HashConteudo is not null)
             secao.AddParagraph($"Hash do conteúdo (SHA-256): {Hash(m.HashConteudo)}").Format.Font.Size = 8;

@@ -77,6 +77,16 @@ describe("AutorizacoesForaEscala", () => {
     expect(administracaoService.revogarAutorizacao).toHaveBeenCalledWith("a1");
   });
 
+  it("Falha_ao_revogar_fica_no_dialogo", async () => {
+    vi.mocked(administracaoService.revogarAutorizacao).mockRejectedValue(new Error("Falha na rede"));
+    const user = montar();
+    await user.click(await screen.findByRole("button", { name: /Revogar autorização de Ana Souza/ }));
+    const d = within(screen.getByRole("dialog"));
+    await user.click(d.getByRole("button", { name: "Revogar" }));
+    expect(await d.findByRole("alert")).toHaveTextContent("Falha na rede");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   it("Profissional_nao_ve_autorizacoes", () => {
     montar("ProfissionalNap");
     expect(screen.queryByText("Autorizações fora da escala")).not.toBeInTheDocument();

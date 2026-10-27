@@ -14,9 +14,10 @@ const obter = vi.mocked(peiService.obter);
 const versao = { ...versaoBase, acoes: { ...acoesNenhuma, podeEditar: true, podeEnviarRevisao: true } };
 
 beforeEach(() => {
-  salvar.mockReset().mockResolvedValue(undefined);
+  salvar.mockReset().mockResolvedValue("e2");
   enviar.mockReset().mockResolvedValue(undefined);
-  obter.mockReset().mockResolvedValue({ ...versao, versao: "e2" });
+  // Releitura daria a versão de outra aba: o formulário não pode usá-la.
+  obter.mockReset().mockResolvedValue({ ...versao, versao: "outra-aba" });
 });
 
 describe("ConteudoPeiForm", () => {
@@ -38,6 +39,16 @@ describe("ConteudoPeiForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "Enviar para revisão" }));
     await waitFor(() => expect(enviar).toHaveBeenCalledWith("v1", "e2"));
     expect(salvar).toHaveBeenCalledWith("v1", expect.objectContaining({ adaptacoes: "Tempo extra", vigenciaInicio: "2026-02-01" }), "e1");
+  });
+
+  it("Salvar_duas_vezes_usa_a_versao_devolvida_pelo_put", async () => {
+    salvar.mockResolvedValueOnce("e2").mockResolvedValueOnce("e3");
+    montar(<ConteudoPeiForm versao={versao} />, "ProfissionalNap");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await screen.findByText("Rascunho salvo.");
+    await userEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+    await waitFor(() => expect(salvar).toHaveBeenLastCalledWith("v1", expect.anything(), "e2"));
+    expect(obter).not.toHaveBeenCalled();
   });
 
   it("Conflito_409_oferece_recarregar_valores_atuais", async () => {

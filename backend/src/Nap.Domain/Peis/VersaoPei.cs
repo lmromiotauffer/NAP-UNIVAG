@@ -26,6 +26,7 @@ public class VersaoPei : Entidade
     public DateTimeOffset? ArquivadaEm { get; private set; }
     public string? MotivoArquivamento { get; private set; }
 
+    /// <summary>Todas, inclusive as invalidadas por uma devolução; as que valem estão em <see cref="AssinaturaValida"/>.</summary>
     public IReadOnlyCollection<AssinaturaPei> Assinaturas => _assinaturas;
     public IReadOnlyCollection<CienciaPei> Ciencias => _ciencias;
 
@@ -33,6 +34,10 @@ public class VersaoPei : Entidade
         [EstadoVersaoPei.Rascunho, EstadoVersaoPei.EmRevisao, EstadoVersaoPei.AguardandoAssinaturas];
 
     public bool Aberta => EstadosAbertos.Contains(Estado);
+
+    /// <summary>Abertos e <c>Assinada</c>: com uma delas não se cria nova versão (a assinada só sai do caminho publicada,
+    /// e só a mais recente publica; uma nova versão a deixaria presa).</summary>
+    public static readonly EstadoVersaoPei[] EstadosQueImpedemNovaVersao = [.. EstadosAbertos, EstadoVersaoPei.Assinada];
 
     // Condições de estado de cada operação: os métodos abaixo as usam como guarda e a consulta de leitura as reaproveita
     // para os botões, então uma mudança de regra vale nos dois lugares.
@@ -45,7 +50,9 @@ public class VersaoPei : Entidade
     public static bool PodeArquivar(EstadoVersaoPei e) => e == EstadoVersaoPei.Publicada;
     public static bool PodeRegistrarCiencia(EstadoVersaoPei e) => e == EstadoVersaoPei.Publicada;
 
-    public bool TodasAssinaturas => Enum.GetValues<PapelAssinatura>().All(p => _assinaturas.Any(a => a.Papel == p));
+    public bool TodasAssinaturas => Enum.GetValues<PapelAssinatura>().All(p => AssinaturaValida(p) is not null);
+
+    public AssinaturaPei? AssinaturaValida(PapelAssinatura papel) => _assinaturas.SingleOrDefault(a => a.Valida && a.Papel == papel);
 
     private VersaoPei() { } // ORM
 
@@ -78,20 +85,18 @@ public class VersaoPei : Entidade
         AtualizadaEm = agora;
     }
 
-    public void AprovarRevisao(Guid aprovadorId, string hashConteudo, DateTimeOffset agora)
+    public void AprovarRevisao(Guid aprovadorId, DateTimeOffset agora)
     {
         if (!PodeAprovar(Estado)) throw new DomainException("Só uma versão em revisão pode ser aprovada.");
-        if (hashConteudo != CalculadoraHashPei.Calcular(Conteudo))
-            throw new DomainException("O hash informado não corresponde ao conteúdo da versão.");
         Estado = EstadoVersaoPei.AguardandoAssinaturas;
-        HashConteudo = hashConteudo;
+        HashConteudo = CalculadoraHashPei.Calcular(Conteudo);
         AprovadaEm = agora;
         AprovadaPorId = aprovadorId;
         AtualizadaEm = agora;
     }
 
     // Também vale em AguardandoAssinaturas: o conteúdo volta a ser editável, então o hash
-    // congelado e as assinaturas já colhidas deixam de valer.
+    // congelado e as assinaturas já colhidas deixam de valer (invalidadas, não apagadas: são a prova do que foi assinado).
     public void Devolver(string justificativa, DateTimeOffset agora)
     {
         if (!PodeDevolver(Estado))
@@ -105,24 +110,24 @@ public class VersaoPei : Entidade
         HashConteudo = null;
         AprovadaEm = null;
         AprovadaPorId = null;
-        _assinaturas.Clear();
+        foreach (var a in _assinaturas) a.Invalidar(agora);
         AtualizadaEm = agora;
     }
 
     public void RegistrarAssinatura(PapelAssinatura papel, Guid? signatarioId, string nome, string hashConteudo,
-        string evidencia, DateTimeOffset agora)
+        string evidencia, DateTimeOffset agora, string metodo = "Demonstrativa")
     {
         if (!PodeRegistrarAssinatura(Estado)) throw new DomainException("A versão não está aguardando assinaturas.");
         if (!string.Equals(hashConteudo, HashConteudo, StringComparison.Ordinal))
             throw new DomainException("O hash assinado não corresponde ao conteúdo da versão.");
-        if (_assinaturas.Any(a => a.Papel == papel))
+        if (AssinaturaValida(papel) is not null)
             throw new DomainException("Esta versão já foi assinada neste papel.");
         var nomeLimpo = (nome ?? string.Empty).Trim();
         if (nomeLimpo.Length is < 1 or > 200)
             throw new DomainException("O nome do signatário deve ter de 1 a 200 caracteres.");
         if (string.IsNullOrWhiteSpace(evidencia))
             throw new DomainException("A evidência da assinatura é obrigatória.");
-        _assinaturas.Add(AssinaturaPei.Criar(papel, signatarioId, nomeLimpo, hashConteudo, evidencia, agora));
+        _assinaturas.Add(AssinaturaPei.Criar(papel, signatarioId, nomeLimpo, hashConteudo, metodo, evidencia, agora));
         if (TodasAssinaturas) Estado = EstadoVersaoPei.Assinada;
         AtualizadaEm = agora;
     }

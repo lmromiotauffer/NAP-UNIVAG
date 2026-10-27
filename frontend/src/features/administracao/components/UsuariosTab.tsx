@@ -18,7 +18,7 @@ import { classeMolduraRolavel, Table, th, td, soMedio } from "../../../component
 import { comParametro, paginaDaUrl } from "../../../lib/queryKeys";
 import { useToast } from "../../../components/ui/Toast";
 import { cn } from "../../../lib/cn";
-import { mensagemErro } from "../../../lib/api";
+import { mensagemErro, renovarSessao } from "../../../lib/api";
 import type { UsuarioAdmin } from "../../../lib/types";
 import { useCursos } from "../../compartilhado/catalogos";
 import { useAlterarSituacaoUsuario, useCriarUsuario, useGerarSenhaTemporaria, useListaUsuarios } from "../hooks/useAdministracao";
@@ -219,37 +219,41 @@ export function UsuariosTab() {
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <BuscaUrl id="busca-usuario" rotulo="Buscar por nome ou e-mail" valor={busca} aoMudar={(v) => alterar("busca", v)} maxLength={200} className="min-w-0 flex-1 basis-56" />
-        <label className="sr-only" htmlFor="filtro-perfil">
-          Perfil
-        </label>
-        <Select id="filtro-perfil" value={perfil ?? ""} onChange={(e) => alterar("perfil", e.target.value || null)} className={classeFiltro}>
-          <option value="">Todos os perfis</option>
-          {PERFIS.map((p) => (
-            <option key={p} value={p}>
-              {rotuloPerfil(p)}
-            </option>
-          ))}
-        </Select>
-        <label className="sr-only" htmlFor="filtro-curso">
-          Curso
-        </label>
-        <Select id="filtro-curso" value={cursoId} onChange={(e) => alterar("cursoId", e.target.value || null)} className={classeFiltro}>
-          <option value="">Todos os cursos</option>
-          {cursos.data?.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nome}
-            </option>
-          ))}
-        </Select>
-        <label className="sr-only" htmlFor="filtro-ativo">
-          Situação
-        </label>
-        <Select id="filtro-ativo" value={ativo === undefined ? "" : String(ativo)} onChange={(e) => alterar("ativo", e.target.value || null)} className={classeFiltro}>
-          <option value="">Todas as situações</option>
-          <option value="true">Ativos</option>
-          <option value="false">Inativos</option>
-        </Select>
+        {/* Região de busca só com os filtros (o botão "Novo usuário" fica fora dela), como nas outras listagens.
+            basis-full no celular: os filtros ocupam a linha inteira e o botão desce; a partir de `sm` dividem a linha com ele. */}
+        <div role="search" aria-label="Filtrar usuários" className="flex min-w-0 grow basis-full flex-wrap items-center gap-2 sm:basis-0">
+          <BuscaUrl id="busca-usuario" rotulo="Buscar por nome ou e-mail" valor={busca} aoMudar={(v) => alterar("busca", v)} maxLength={200} className="min-w-0 flex-1 basis-56" />
+          <label className="sr-only" htmlFor="filtro-perfil">
+            Perfil
+          </label>
+          <Select id="filtro-perfil" value={perfil ?? ""} onChange={(e) => alterar("perfil", e.target.value || null)} className={classeFiltro}>
+            <option value="">Todos os perfis</option>
+            {PERFIS.map((p) => (
+              <option key={p} value={p}>
+                {rotuloPerfil(p)}
+              </option>
+            ))}
+          </Select>
+          <label className="sr-only" htmlFor="filtro-curso">
+            Curso
+          </label>
+          <Select id="filtro-curso" value={cursoId} onChange={(e) => alterar("cursoId", e.target.value || null)} className={classeFiltro}>
+            <option value="">Todos os cursos</option>
+            {cursos.data?.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </Select>
+          <label className="sr-only" htmlFor="filtro-ativo">
+            Situação
+          </label>
+          <Select id="filtro-ativo" value={ativo === undefined ? "" : String(ativo)} onChange={(e) => alterar("ativo", e.target.value || null)} className={classeFiltro}>
+            <option value="">Todas as situações</option>
+            <option value="true">Ativos</option>
+            <option value="false">Inativos</option>
+          </Select>
+        </div>
         <Button onClick={aoAbrirNovo} className="rounded-full">
           <Plus aria-hidden="true" className="size-4" />
           Novo usuário
@@ -258,7 +262,7 @@ export function UsuariosTab() {
       <section aria-label="Lista de usuários" className={classeMolduraRolavel}>
         {corpo}
       </section>
-      {lista.isError && lista.data && <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} />}
+      {lista.isError && lista.data && <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} className="animate-surgir" />}
 
       <Modal aberto={!!editando} aoFechar={() => setEditando(undefined)} titulo={editando?.usuario ? "Editar usuário" : "Novo usuário"}>
         {editando && (
@@ -273,6 +277,8 @@ export function UsuariosTab() {
             aoCancelar={() => setEditando(undefined)}
             aoConcluir={() => {
               if (editando.usuario) toast.sucesso("Usuário atualizado.");
+              // O próprio nome vive na sessão (cabeçalho, saudação): o refresh reemite o usuário.
+              if (editando.usuario && ehEu(editando.usuario)) void renovarSessao().catch(() => null);
               setEditando(undefined);
             }}
           />
@@ -296,7 +302,7 @@ export function UsuariosTab() {
         carregando={situacao.isPending || gerar.isPending}
       >
         {erro && (
-          <p role="alert" className="text-sm text-urgente">
+          <p role="alert" className="animate-surgir text-sm text-urgente">
             {erro}
           </p>
         )}

@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SessaoContexto, type ContextoSessao } from "../../auth/useSessao";
 import { ToastProvider } from "../../components/ui/Toast";
 import { formatarDiaSemana, hojeCivil, segundaDoDia, somarDias } from "../../lib/format";
@@ -48,6 +48,29 @@ const sessao: ContextoSessao = {
 describe("AgendaPage", () => {
   beforeEach(() => {
     vi.mocked(agendaService.escalaSemana).mockImplementation((semana) => Promise.resolve(semanaDeEscala(semana)));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("sabado_com_faixa_na_escala_abre_no_proprio_dia_no_celular", async () => {
+    // Sábado 03/10/2026, 08h em Cuiabá; a escala desta semana tem faixa no sábado.
+    vi.setSystemTime(new Date("2026-10-03T12:00:00Z"));
+    vi.mocked(agendaService.escalaSemana).mockImplementation((semana) => {
+      const e = semanaDeEscala(semana);
+      e.dias[5] = { ...e.dias[5]!, inicio: "08:00:00", fim: "12:00:00" };
+      return Promise.resolve(e);
+    });
+    const router = createMemoryRouter([{ path: "/agenda", element: <AgendaPage /> }], { initialEntries: ["/agenda"] });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <SessaoContexto value={sessao}>
+          <ToastProvider>
+            <RouterProvider router={router} />
+          </ToastProvider>
+        </SessaoContexto>
+      </QueryClientProvider>,
+    );
+    const dias = within(await screen.findByRole("group", { name: "Dia exibido" }));
+    expect(dias.getByRole("button", { pressed: true })).toHaveTextContent(formatarDiaSemana("2026-10-03"));
   });
 
   it("Agenda_destaca_feriado_e_desabilita_dia_sem_faixa", async () => {

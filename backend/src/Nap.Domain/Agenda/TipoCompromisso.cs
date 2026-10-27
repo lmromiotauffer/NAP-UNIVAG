@@ -31,14 +31,13 @@ public static class TipoCompromissoExtensoes
         or TipoCompromisso.ReuniaoCoordenacaoGestao or TipoCompromisso.ElaboracaoPei
         or TipoCompromisso.TarefaAdministrativa or TipoCompromisso.EncaminhamentoDevolutiva;
 
-    /// <summary>Atendimento fica de fora: a categoria depende do estado do atendimento, não do tipo do compromisso.</summary>
+    /// <summary>Categoria dos tipos que exigem realização. Atendimento e atividade ficam de fora: contam pelos próprios registros.</summary>
     public static CategoriaProducao? CategoriaDe(this TipoCompromisso t) => t switch
     {
         TipoCompromisso.ReuniaoEquipe => CategoriaProducao.ReunioesEquipe,
         TipoCompromisso.ReuniaoCoordenacaoGestao => CategoriaProducao.ReunioesCoordenacao,
         TipoCompromisso.ElaboracaoPei => CategoriaProducao.ElaboracaoPei,
         TipoCompromisso.TarefaAdministrativa or TipoCompromisso.EncaminhamentoDevolutiva => CategoriaProducao.Administrativo,
-        TipoCompromisso.AtividadeCurso => CategoriaProducao.AtividadesCursos,
         _ => null,
     };
 }

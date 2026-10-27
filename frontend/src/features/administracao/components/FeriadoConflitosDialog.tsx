@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import { Button } from "../../../components/ui/Button";
 import { Modal } from "../../../components/ui/Modal";
-import { diaCivil, formatarDataCivil, formatarHora, segundaDoDia } from "../../../lib/format";
+import { diaCivil, formatarData, formatarIntervalo, segundaDoDia } from "../../../lib/format";
 import type { FeriadoCriado } from "../services/administracaoService";
 
 /** Compromissos e atendimentos que já existiam na data do novo feriado: nada é apagado, a resolução é na agenda. */
@@ -26,14 +26,14 @@ export function FeriadoConflitosDialog({ conflitos, aoFechar }: { conflitos: Fer
             <div className="min-w-0">
               <div className="font-semibold">{c.titulo === c.tipo ? c.profissional : c.titulo}</div>
               <div className="text-suave">
-                {c.tipo} · {c.titulo === c.tipo ? "" : `${c.profissional} · `}{formatarDataCivil(diaCivil(c.inicio))}, {formatarHora(c.inicio)}–{formatarHora(c.fim)}
+                {c.tipo} · {c.titulo === c.tipo ? "" : `${c.profissional} · `}{formatarData(c.inicio)}, {formatarIntervalo(c.inicio, c.fim)}
               </div>
             </div>
             <Link
               to={`/agenda?semana=${segundaDoDia(diaCivil(c.inicio))}&profissional=${c.profissionalId}`}
               onClick={aoFechar}
-              aria-label={`Abrir a semana na agenda: ${c.titulo}`}
-              className="text-rotulo font-semibold text-primaria"
+              aria-label={`Ver na agenda: ${c.titulo}`}
+              className="inline-flex items-center font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11"
             >
               Ver na agenda
             </Link>

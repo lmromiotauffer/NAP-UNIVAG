@@ -28,6 +28,9 @@ describe("capacidades", () => {
     expect(pode(usuario("ProfissionalNap"), "encaminhamentos.criar")).toBe(true);
     expect(pode(usuario("CoordenadorCurso"), "encaminhamentos")).toBe(true);
     expect(pode(usuario("CoordenadorCurso"), "encaminhamentos.criar")).toBe(false);
+    expect(pode(usuario("CoordenadorCurso"), "documentos.anexar")).toBe(true);
+    expect(pode(usuario("CoordenadorCurso"), "documentos.gerenciar")).toBe(false);
+    for (const perfil of ["Sip", "Gestao"]) expect(pode(usuario(perfil), "documentos.anexar")).toBe(false);
     expect(pode(usuario("Gestao"), "encaminhamentos")).toBe(false);
   });
 

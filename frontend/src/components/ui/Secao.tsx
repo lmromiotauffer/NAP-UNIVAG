@@ -16,7 +16,7 @@ export function SecaoTexto({ titulo, nota, children }: { titulo: string; nota?: 
   );
 }
 
-export const classeDetalhes = "flex h-7 items-center gap-1 rounded-md border pointer-coarse:min-h-11 border-borda px-2.5 text-xs font-semibold text-primaria transition-colors hover:bg-realce";
+export const classeDetalhes = "flex h-7 cursor-pointer items-center gap-1 rounded-md border pointer-coarse:min-h-11 border-borda px-2.5 text-xs font-semibold text-primaria transition-colors duration-150 hover:bg-realce";
 
 /** Cartão com título e, opcionalmente, nota e botão "Detalhes" no canto superior direito (painel e produção). */
 export function CartaoSecao({ titulo, nota, aoDetalhar, rotuloDetalhar, className, children }: { titulo: string; nota?: string; aoDetalhar?: () => void; rotuloDetalhar?: string; className?: string; children: ReactNode }) {

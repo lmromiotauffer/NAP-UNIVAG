@@ -42,7 +42,7 @@ export function CancelarEncaminhamentoDialog({ encaminhamento, aoFechar, aoConcl
   return (
     <Modal aberto aoFechar={aoFechar} titulo="Cancelar encaminhamento">
       <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-        {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+        {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
         <p className="text-sm">O encaminhamento de {encaminhamento.aluno} será encerrado e não poderá mais receber retornos.</p>
         <Field rotulo="Justificativa" erro={errors.justificativa?.message} obrigatorio>
           <Textarea maxLength={1000} {...register("justificativa")} />

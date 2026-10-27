@@ -30,7 +30,7 @@ public class AcessoAssinaturaPeiPersistenciaTests(SqlServerFixture fx)
         var pei = Pei.Criar(aluno.Id, prof, conteudo, prof, Agora);
         var v = pei.Versoes.Single();
         v.EnviarParaRevisao(Agora);
-        v.AprovarRevisao(prof, CalculadoraHashPei.Calcular(v.Conteudo), Agora);
+        v.AprovarRevisao(prof, Agora);
         await using var db = fx.CriarContexto();
         db.Add(pei);
         await db.SaveChangesAsync(Ct);
@@ -161,7 +161,7 @@ public class AcessoAssinaturaPeiPersistenciaTests(SqlServerFixture fx)
     }
 
     [Fact]
-    public async Task Devolver_apos_assinatura_do_profissional_apaga_as_assinaturas()
+    public async Task Devolver_apos_assinatura_do_profissional_invalida_sem_apagar()
     {
         var (v, prof) = await NovaVersaoAguardandoAsync();
         await using (var a = fx.CriarContexto())
@@ -181,6 +181,9 @@ public class AcessoAssinaturaPeiPersistenciaTests(SqlServerFixture fx)
         await using var c = fx.CriarContexto();
         var final = (await new PeiRepository(c).ObterPorVersaoAsync(v.Id, Ct))!.Versoes.Single();
         Assert.Equal((EstadoVersaoPei.Rascunho, (string?)null), (final.Estado, final.HashConteudo));
-        Assert.Equal(0, await c.Set<AssinaturaPei>().CountAsync(x => EF.Property<Guid>(x, "VersaoId") == v.Id, Ct));
+        // A assinatura fica como prova do que foi assinado, marcada como invalidada pela devolução.
+        var assinatura = await c.Set<AssinaturaPei>().SingleAsync(x => EF.Property<Guid>(x, "VersaoId") == v.Id, Ct);
+        Assert.Equal(Agora.AddMinutes(1), assinatura.InvalidadaEm);
+        Assert.Null(final.AssinaturaValida(PapelAssinatura.Profissional));
     }
 }

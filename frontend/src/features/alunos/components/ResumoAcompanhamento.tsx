@@ -5,7 +5,7 @@ import type { AlunoFicha } from "../../../lib/types";
 
 function Cartao({ rotulo, valor, nota, destaque, numero }: { rotulo: string; valor: ReactNode; nota?: string; destaque?: boolean; numero?: boolean }) {
   return (
-    <div className={cn("rounded-2xl px-[18px] py-4", destaque ? "bg-bloco text-bloco-texto" : "border border-borda bg-superficie")}>
+    <div className={cn("rounded-cartao px-[18px] py-4", destaque ? "bg-bloco text-bloco-texto" : "border border-borda bg-superficie")}>
       <div className={cn("text-xs", destaque ? "text-bloco-texto/70" : "text-suave")}>{rotulo}</div>
       <div className={numero ? "mt-1.5 font-titulo text-[2.125rem] leading-none font-black tracking-[-0.04em] tabular-nums" : "mt-2 text-destaque font-semibold"}>
         {valor}

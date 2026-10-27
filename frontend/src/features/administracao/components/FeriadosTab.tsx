@@ -53,7 +53,7 @@ function FeriadoForm({ aoCriado, aoCancelar }: { aoCriado: (r: FeriadoCriado) =>
 
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       <Field rotulo="Data" erro={errors.data?.message} obrigatorio>
         <Input type="date" {...register("data")} />
       </Field>
@@ -120,7 +120,7 @@ export function FeriadosTab() {
           {feriados.data
             ? feriados.data.map((f) => (
                 <tr key={f.id} className="border-b border-borda text-corpo">
-                  <td className={td}>{formatarDataCivil(f.data)}</td>
+                  <td className={cn(td, "whitespace-nowrap tabular-nums")}>{formatarDataCivil(f.data)}</td>
                   <td className={td}>
                     <span className="font-semibold">{f.descricao}</span>
                   </td>
@@ -159,7 +159,7 @@ export function FeriadosTab() {
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         {/* Pílula como nas outras barras de filtro; o rótulo fica visível porque o ano sozinho não diz o que o campo é. */}
-        <div className="flex items-center gap-1.5 text-denso text-suave">
+        <div role="search" aria-label="Filtrar feriados" className="flex items-center gap-1.5 text-denso text-suave">
           <label htmlFor="feriados-ano">Ano</label>
           <Select id="feriados-ano" className={cn(classeFiltro, "min-w-[6rem] sm:min-w-[6rem]")} value={ano} onChange={(e) => setAno(Number(e.target.value))}>
             {[anoAtual - 1, anoAtual, anoAtual + 1, anoAtual + 2].map((a) => (
@@ -200,7 +200,7 @@ export function FeriadosTab() {
         carregando={inativar.isPending}
       >
         {erro && (
-          <p role="alert" className="text-sm text-urgente">
+          <p role="alert" className="animate-surgir text-sm text-urgente">
             {erro}
           </p>
         )}

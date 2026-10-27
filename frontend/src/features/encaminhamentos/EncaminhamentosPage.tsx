@@ -9,7 +9,7 @@ import { Modal } from "../../components/ui/Modal";
 import { classeMolduraRolavel } from "../../components/ui/Table";
 import { useToast } from "../../components/ui/Toast";
 import { cn } from "../../lib/cn";
-import { temFiltroAtivo } from "../../lib/queryKeys";
+import { comParametro, temFiltroAtivo } from "../../lib/queryKeys";
 import { EncaminhamentoForm } from "./components/EncaminhamentoForm";
 import { CHAVES_FILTRO, FiltrosEncaminhamentos, filtroDaUrl } from "./components/FiltrosEncaminhamentos";
 import { ListaEncaminhamentos } from "./components/ListaEncaminhamentos";
@@ -22,14 +22,7 @@ export function EncaminhamentosPage() {
   const [criando, setCriando] = useState(false);
   const podeCriar = pode(usuario, "encaminhamentos.criar");
 
-  function irParaPagina(pagina: number) {
-    setParams((atual) => {
-      const proximo = new URLSearchParams(atual);
-      if (pagina > 1) proximo.set("pagina", String(pagina));
-      else proximo.delete("pagina");
-      return proximo;
-    });
-  }
+  const irParaPagina = (pagina: number) => setParams((atual) => comParametro(atual, "pagina", pagina > 1 ? String(pagina) : null));
 
   return (
     <>

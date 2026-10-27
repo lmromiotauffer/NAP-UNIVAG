@@ -14,6 +14,10 @@ public sealed class FechamentoRepository(NapDbContext db) : IFechamentoRepositor
 
     public void Adicionar(FechamentoSemanal f) => db.FechamentosSemanais.Add(f);
 
+    public Task<bool> ExisteFechadaAsync(Guid? profissionalId, DateOnly primeiraSemana, DateOnly? ate, CancellationToken ct) =>
+        db.FechamentosSemanais.AnyAsync(f => f.Fechada && (profissionalId == null || f.ProfissionalId == profissionalId)
+            && f.Semana >= primeiraSemana && (ate == null || f.Semana <= ate), ct);
+
     public async Task BloquearAsync(Guid profissionalId, bool exclusivo, CancellationToken ct)
     {
         if (db.Database.CurrentTransaction is null)

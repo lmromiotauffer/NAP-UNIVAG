@@ -7,6 +7,7 @@ export function ConfirmDialog({
   titulo,
   mensagem,
   confirmar,
+  cancelar = "Cancelar",
   aoConfirmar,
   aoCancelar,
   carregando,
@@ -16,6 +17,8 @@ export function ConfirmDialog({
   titulo: string;
   mensagem: string;
   confirmar: string;
+  /** Rótulo do botão secundário; "Voltar" quando a ação confirmada já é um cancelamento. */
+  cancelar?: string;
   aoConfirmar: () => void;
   aoCancelar: () => void;
   carregando?: boolean;
@@ -31,7 +34,7 @@ export function ConfirmDialog({
       rodape={
         <>
           <Button variante="secundaria" onClick={aoCancelar} disabled={carregando}>
-            Cancelar
+            {cancelar}
           </Button>
           <Button variante="perigo" onClick={aoConfirmar} carregando={carregando}>
             {confirmar}

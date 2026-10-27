@@ -1,6 +1,6 @@
 import type { components } from "../../lib/api-schema";
 
-export type TipoAtividade = components["schemas"]["TipoAtividade"];
+type TipoAtividade = components["schemas"]["TipoAtividade"];
 
 export const ROTULO_TIPO_ATIVIDADE: Record<TipoAtividade, string> = {
   RodaConversa: "Roda de conversa",
@@ -11,6 +11,5 @@ export const ROTULO_TIPO_ATIVIDADE: Record<TipoAtividade, string> = {
   Outra: "Outra",
 };
 export const TIPOS_ATIVIDADE = Object.keys(ROTULO_TIPO_ATIVIDADE) as [TipoAtividade, ...TipoAtividade[]];
-export const ehTipoAtividade = (t: string): t is TipoAtividade => (TIPOS_ATIVIDADE as string[]).includes(t);
 
 export const ROTULO_TURNO = { Manha: "Manhã", Tarde: "Tarde", Noite: "Noite" } as const;

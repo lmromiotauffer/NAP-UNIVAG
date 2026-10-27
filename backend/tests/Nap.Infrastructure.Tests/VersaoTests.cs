@@ -26,7 +26,7 @@ public class VersaoTests(SqlServerFixture fx)
         await using (var db = fx.CriarContexto())
         {
             var a = (await db.Alunos.FindAsync([aluno.Id], ct))!;
-            a.AtualizarDados("Outro nome", 4, null, null, prof);
+            a.AtualizarDados("Outro nome", 4, null, null, prof, true);
             await db.SaveChangesAsync(ct);
         }
 
@@ -47,7 +47,7 @@ public class VersaoTests(SqlServerFixture fx)
     [InlineData("")]
     [InlineData("*")]
     [InlineData("não-é-base64")]
-    public async Task ExigirVersao_com_valor_ilegivel_lanca_conflito(string versao)
+    public async Task ExigirVersao_com_valor_ilegivel_lanca_erro_de_validacao(string versao)
     {
         var ct = TestContext.Current.CancellationToken;
         var prof = await fx.CriarProfissionalAsync();
@@ -55,7 +55,9 @@ public class VersaoTests(SqlServerFixture fx)
 
         await using var contexto = fx.CriarContexto();
         var carregado = (await contexto.Alunos.FindAsync([aluno.Id], ct))!;
-        Assert.Throws<ConflictException>(() => new UnidadeDeTrabalho(contexto).ExigirVersao(carregado, versao));
+        // Cabeçalho ilegível é erro do cliente (400 em ifMatch), não conflito de concorrência.
+        var erro = Assert.Throws<ValidationException>(() => new UnidadeDeTrabalho(contexto).ExigirVersao(carregado, versao));
+        Assert.Contains("ifMatch", erro.Erros.Keys);
     }
 
     [Fact]
@@ -67,7 +69,7 @@ public class VersaoTests(SqlServerFixture fx)
         var agora = new DateTimeOffset(2026, 8, 1, 8, 0, 0, TimeSpan.FromHours(-4));
         var inicio = agora.AddDays(2);
         var compromisso = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião", IntervaloHorario.Criar(inicio, inicio.AddHours(1)),
-            prof, null, null, prof, agora);
+            prof, null, null, prof);
         var atendimento = Atendimento.RegistrarAvulso(aluno.Id, prof, IntervaloHorario.Criar(agora.AddDays(-1), agora.AddDays(-1).AddHours(1)),
             TipoAtendimento.Acompanhamento, EstadoAtendimento.Realizado, new DadosClinicos("Demanda", "Obs", null, null),
             "Justificativa", prof, agora);

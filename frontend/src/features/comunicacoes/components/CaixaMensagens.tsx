@@ -69,8 +69,8 @@ export function CaixaMensagens({
 
   return (
     <>
-      {/* A lista monta depois do skeleton: chega com animate-surgir; a troca de página só esmaece (keepPreviousData). */}
-      <ul aria-busy={lista.isPlaceholderData} className={cn("animate-surgir m-0 flex list-none flex-col p-0 transition-opacity duration-150 md:min-h-0 md:overflow-y-auto", lista.isPlaceholderData && "opacity-60")}>
+      {/* A lista substitui o skeleton sem animação de entrada (apagaria e surgiria de novo); a troca de página só esmaece (keepPreviousData). */}
+      <ul aria-busy={lista.isPlaceholderData} className={cn("m-0 flex list-none flex-col p-0 transition-opacity duration-150 md:min-h-0 md:overflow-y-auto", lista.isPlaceholderData && "opacity-60")}>
         {lista.data.itens.map((m) => (
           <li key={m.id} className="relative flex items-center gap-3 border-b border-borda px-4 py-2 text-corpo transition-colors duration-150 last:border-b-0 hover:bg-realce">
             <div className="min-w-0 flex-1">
@@ -105,7 +105,7 @@ export function CaixaMensagens({
       )}
       {lista.isError && (
         <div className="p-4">
-          <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} />
+          <ErrorState erro={lista.error} aoTentarNovamente={() => void lista.refetch()} className="animate-surgir" />
         </div>
       )}
     </>

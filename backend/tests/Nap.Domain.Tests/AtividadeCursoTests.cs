@@ -47,7 +47,7 @@ public class AtividadeCursoTests
     public void Compromisso_cancelado_e_rejeitado()
     {
         var c = CompromissoTests.Novo(TipoCompromisso.AtividadeCurso);
-        c.Cancelar("Motivo", Autor, Agora);
+        c.Cancelar("Motivo");
         Assert.Throws<DomainException>(() => AtividadeCurso.RegistrarDeCompromisso(
             c, CompromissoTests.Intervalo(7), null, TipoAtividade.Outra, "Descrição", Autor, Agora));
     }

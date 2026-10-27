@@ -3,8 +3,9 @@ using Nap.Application.Comum;
 
 namespace Nap.Application.Features.Peis.Commands;
 
-/// <summary>Exclusão física de um rascunho esquecido (a partir da v2), para não bloquear novas versões.</summary>
-public record DescartarVersaoPeiCommand(Guid VersaoId);
+/// <summary>Exclusão física de um rascunho esquecido (a partir da v2), para não bloquear novas versões. Exige a versão
+/// vista: a exclusão é definitiva e não pode apagar texto gravado depois por outra pessoa.</summary>
+public record DescartarVersaoPeiCommand(Guid VersaoId, string Versao);
 
 public class DescartarVersaoPeiValidator : AbstractValidator<DescartarVersaoPeiCommand>
 {
@@ -20,6 +21,7 @@ public sealed class DescartarVersaoPeiHandler(IValidator<DescartarVersaoPeiComma
         await validador.ValidarAsync(comando, ct);
         var (pei, versao) = await AutorizacaoPei.ObterVersaoAsync(peis, usuario, comando.VersaoId, ct);
         if (!AutorizacaoPei.PodeElaborar(usuario)) throw new ForbiddenException();
+        uow.ExigirVersao(versao, comando.Versao);
 
         pei.DescartarVersao(versao);
         peis.RemoverVersao(versao);

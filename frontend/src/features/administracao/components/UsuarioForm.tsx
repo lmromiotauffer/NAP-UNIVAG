@@ -5,6 +5,7 @@ import { z } from "zod";
 import { rotuloPerfil } from "../../../auth/capacidades";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
+import { Dado } from "../../../components/ui/Dado";
 import { Field } from "../../../components/ui/Field";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
@@ -20,7 +21,7 @@ export const PERFIS = ["Administrador", "CoordenadorNap", "ProfissionalNap", "Co
 const esquemaDe = (criando: boolean) =>
   z
     .object({
-      email: criando ? z.email("Informe um e-mail válido.") : z.string(),
+      email: criando ? z.email("Informe um e-mail válido.").max(256, "Use no máximo 256 caracteres.") : z.string(),
       nomeCompleto: z.string().trim().min(3, "Informe o nome completo (mínimo 3 caracteres).").max(200, "Use no máximo 200 caracteres."),
       perfil: z.enum(PERFIS, "Selecione o perfil."),
       cursoId: z.string(),
@@ -88,15 +89,14 @@ export function UsuarioForm({
 
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
-      {cursos.isError && <Alert variante="urgente">Não foi possível carregar os cursos. Feche e tente novamente.</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
+      {cursos.isError && <Alert variante="urgente" className="animate-surgir">Não foi possível carregar os cursos. Feche e tente novamente.</Alert>}
       <Field rotulo="Nome completo" erro={errors.nomeCompleto?.message} obrigatorio>
         <Input autoComplete="off" {...register("nomeCompleto")} />
       </Field>
       {usuario ? (
         <dl className="text-sm">
-          <dt className="text-xs text-suave">E-mail (é o login)</dt>
-          <dd className="break-all">{usuario.email}</dd>
+          <Dado rotulo="E-mail (é o login)">{usuario.email}</Dado>
         </dl>
       ) : (
         <Field rotulo="E-mail" erro={errors.email?.message} dica="É o login da pessoa." obrigatorio>
@@ -104,17 +104,13 @@ export function UsuarioForm({
         </Field>
       )}
       {ehProprio ? (
-        <dl className="text-sm">
-          <dt className="text-xs text-suave">Perfil</dt>
-          <dd>{rotuloPerfil(usuario?.perfil ?? "")}</dd>
-          {usuario?.curso && (
-            <>
-              <dt className="mt-2 text-xs text-suave">Curso</dt>
-              <dd>{usuario.curso}</dd>
-            </>
-          )}
-          <dd className="mt-2 text-xs text-suave">Você não pode alterar o próprio acesso.</dd>
-        </dl>
+        <div className="flex flex-col gap-2 text-sm">
+          <dl className="flex flex-col gap-2">
+            <Dado rotulo="Perfil">{rotuloPerfil(usuario?.perfil ?? "")}</Dado>
+            {usuario?.curso && <Dado rotulo="Curso">{usuario.curso}</Dado>}
+          </dl>
+          <p className="m-0 text-xs text-suave">Você não pode alterar o próprio acesso.</p>
+        </div>
       ) : (
         <>
           <Field rotulo="Perfil" erro={errors.perfil?.message} obrigatorio>

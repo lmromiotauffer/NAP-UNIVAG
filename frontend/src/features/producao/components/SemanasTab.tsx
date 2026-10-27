@@ -1,3 +1,4 @@
+import { CalendarCheck } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "../../../components/ui/Badge";
 import { Button } from "../../../components/ui/Button";
@@ -10,7 +11,7 @@ import { Skeleton } from "../../../components/ui/Skeleton";
 import { classeMolduraRolavel, Table, th, td } from "../../../components/ui/Table";
 import { useToast } from "../../../components/ui/Toast";
 import { cn } from "../../../lib/cn";
-import { formatarDataCivil, formatarDataHora, somarDias } from "../../../lib/format";
+import { formatarDataCivil, formatarDataHora, formatarInteiro, somarDias } from "../../../lib/format";
 import type { SemanaProducao } from "../../../lib/types";
 import { useSemanasProducao } from "../hooks/useProducao";
 import { FecharSemanaDialog } from "./FecharSemanaDialog";
@@ -26,8 +27,8 @@ export function SemanasTab({ inicio, fim, profissionalId, hoje, podeReabrir }: {
   const [pagina, setPagina] = useState(1);
   const [reabrindo, setReabrindo] = useState<SemanaProducao | null>(null);
   const toast = useToast();
-  // Só a lista que substitui o skeleton chega animada; vinda do cache ela monta junto com o painel da aba, que já anima.
-  const [veioDoSkeleton] = useState(consulta.isPending);
+  // A chave da consulta pode mudar sem remontar a aba (mesmo início, fim diferente): a lista anterior esmaece até a resposta chegar.
+  const ocupado = consulta.isPlaceholderData || undefined;
   return (
     <div className="flex flex-col gap-3 md:min-h-0 md:flex-1">
       {consulta.isPending && (
@@ -38,18 +39,18 @@ export function SemanasTab({ inicio, fim, profissionalId, hoje, podeReabrir }: {
       {consulta.isError && <ErrorState erro={consulta.error} aoTentarNovamente={() => void consulta.refetch()} />}
       {/* Vazio dentro da mesma moldura da lista, como nas listagens da administração. */}
       {consulta.data && consulta.data.length === 0 && (
-        <section aria-label="Semanas do período" className={cn(classeMolduraRolavel, veioDoSkeleton && "animate-surgir")}>
-          <EmptyState titulo="Nenhuma semana no período" />
+        <section aria-label="Semanas do período" aria-busy={ocupado} className={cn(classeMolduraRolavel, "transition-opacity duration-150", ocupado && "opacity-60")}>
+          <EmptyState icone={<CalendarCheck />} titulo="Nenhuma semana no período" />
         </section>
       )}
       {consulta.data && consulta.data.length > 0 && (
-        <section aria-label="Semanas do período" className={cn(classeMolduraRolavel, veioDoSkeleton && "animate-surgir")}>
+        <section aria-label="Semanas do período" aria-busy={ocupado} className={cn(classeMolduraRolavel, "transition-opacity duration-150", ocupado && "opacity-60")}>
           <Table caption="Semanas do período">
             <thead>
               <tr className="border-b border-borda">
                 {["Semana", "Profissional", "Situação", "Pendências", "Histórico", "Ações"].map((r) => (
-                  <th key={r} scope="col" className={th}>
-                    {r}
+                  <th key={r} scope="col" className={cn(th, r === "Pendências" && "text-right")}>
+                    {r === "Ações" ? <span className="sr-only">{r}</span> : r}
                   </th>
                 ))}
               </tr>
@@ -68,7 +69,7 @@ export function SemanasTab({ inicio, fim, profissionalId, hoje, podeReabrir }: {
                     <td className={td}>
                       <Badge variante={s.fechada ? "realizado" : "neutro"}>{s.fechada ? "Fechada" : "Aberta"}</Badge>
                     </td>
-                    <td className={`${td} tabular-nums`}>{s.pendentes}</td>
+                    <td className={`${td} text-right tabular-nums`}>{formatarInteiro(s.pendentes)}</td>
                     <td className={td}>
                       {s.eventos.length === 0 ? (
                         "—"

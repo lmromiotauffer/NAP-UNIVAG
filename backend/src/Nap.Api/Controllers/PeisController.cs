@@ -47,21 +47,18 @@ public class PeisController : ControllerBase
     [HttpPut("peis/versoes/{id:guid}/conteudo")]
     [Authorize(Policy = Politicas.EquipeNap)]
     [ExigeIfMatch]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> AtualizarConteudo(Guid id, ConteudoPeiInput conteudo,
-        [FromServices] AtualizarConteudoPeiHandler handler, CancellationToken ct)
-    {
-        await handler.Handle(new AtualizarConteudoPeiCommand(id, conteudo, HttpContext.VersaoIfMatch()), ct);
-        return NoContent();
-    }
+    public Task<VersaoAtualizadaDto> AtualizarConteudo(Guid id, ConteudoPeiInput conteudo,
+        [FromServices] AtualizarConteudoPeiHandler handler, CancellationToken ct) =>
+        handler.Handle(new AtualizarConteudoPeiCommand(id, conteudo, HttpContext.VersaoIfMatch()), ct);
 
     /// <summary>Só rascunho de versão posterior à primeira; exclusão física.</summary>
     [HttpDelete("peis/versoes/{id:guid}")]
     [Authorize(Policy = Politicas.EquipeNap)]
+    [ExigeIfMatch]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Descartar(Guid id, [FromServices] DescartarVersaoPeiHandler handler, CancellationToken ct)
     {
-        await handler.Handle(new DescartarVersaoPeiCommand(id), ct);
+        await handler.Handle(new DescartarVersaoPeiCommand(id, HttpContext.VersaoIfMatch()), ct);
         return NoContent();
     }
 

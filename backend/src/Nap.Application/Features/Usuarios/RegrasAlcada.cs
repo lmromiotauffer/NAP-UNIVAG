@@ -27,7 +27,6 @@ public static class RegrasAlcada
     public static async Task ExigirOutroAdministradorAsync(IGestaoUsuarios gestao, UsuarioAdminDto alvo, CancellationToken ct)
     {
         if (alvo is not { Perfil: Perfis.Administrador, Ativo: true }) return;
-        // ponytail: trava de aplicação se virar problema — duas inativações simultâneas podem passar ambas por esta contagem.
         if (await gestao.ContarAdministradoresAtivosAsync(ct) <= 1)
             throw new DomainException("O último administrador ativo não pode ser inativado nem ter o perfil trocado.");
     }

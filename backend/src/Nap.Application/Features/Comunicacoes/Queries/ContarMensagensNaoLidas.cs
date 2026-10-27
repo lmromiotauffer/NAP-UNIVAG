@@ -8,6 +8,6 @@ public sealed class ContarMensagensNaoLidasHandler(IComunicacaoQueries consultas
     public async Task<ContagemNaoLidasDto> Handle(CancellationToken ct = default)
     {
         RegrasComunicacao.ExigirAcesso(usuario);
-        return new(await consultas.ContarNaoLidasAsync(usuario.Id, ct));
+        return new(await consultas.ContarNaoLidasAsync(usuario, ct));
     }
 }

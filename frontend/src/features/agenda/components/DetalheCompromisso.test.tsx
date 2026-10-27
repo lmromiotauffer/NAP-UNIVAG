@@ -103,12 +103,26 @@ describe("DetalheCompromisso", () => {
     const { user } = montar(c);
     await user.click(screen.getByRole("button", { name: "Editar" }));
     expect(screen.getByLabelText(/^Título/)).toHaveFocus();
-    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    await user.click(screen.getByRole("button", { name: "Voltar" }));
     await user.click(screen.getByRole("button", { name: "Remarcar" }));
     expect(screen.getByLabelText(/^Nova data/)).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Voltar" }));
     await user.click(screen.getByRole("button", { name: "Não realizado" }));
     expect(screen.getByLabelText(/^Motivo do cancelamento/)).toHaveFocus();
+  });
+
+  it("trocar_de_modo_anima_o_painel_mas_a_abertura_e_a_volta_do_cancelamento_nao", async () => {
+    const { user } = montar(compromisso("c1"));
+    expect(document.querySelector(".animate-surgir")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Remarcar" }));
+    expect(document.querySelector(".animate-surgir")).not.toBeNull();
+    await user.click(screen.getByRole("button", { name: "Voltar" }));
+    expect(document.querySelector(".animate-surgir")).not.toBeNull();
+    // O cancelamento é outro diálogo: ao voltar, o diálogo do detalhe monta de novo e já anima por conta própria.
+    await user.click(screen.getByRole("button", { name: "Não realizado" }));
+    await user.click(screen.getByRole("button", { name: "Voltar" }));
+    expect(screen.getByRole("button", { name: "Remarcar" })).toBeInTheDocument();
+    expect(document.querySelector(".animate-surgir")).toBeNull();
   });
 
   it("Realizacao_so_aparece_depois_do_termino", () => {

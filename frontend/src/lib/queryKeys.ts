@@ -72,8 +72,8 @@ export const INVALIDAR_APOS_ENCAMINHAMENTO = [["encaminhamentos"], ["alunos"], [
 export const INVALIDAR_APOS_MENSAGEM = [["comunicacoes"], ["notificacoes"]] as const;
 export const INVALIDAR_APOS_DOCUMENTO = [["documentos"]] as const;
 export const INVALIDAR_APOS_AGENDA = [["agenda"], ["painel"], ["alunos"], ["producao"]] as const;
-// A agenda e os atendimentos exibem o nome do aluno: um aluno renomeado precisa atualizar ali também.
-export const INVALIDAR_APOS_ALUNO = [["alunos"], ["painel"], ["agenda"], ["atendimentos"]] as const;
+// Agenda, atendimentos, encaminhamentos, comunicações e PEI exibem o nome do aluno: um aluno renomeado precisa atualizar ali também.
+export const INVALIDAR_APOS_ALUNO = [["alunos"], ["painel"], ["agenda"], ["atendimentos"], ["encaminhamentos"], ["comunicacoes"], ["peis"]] as const;
 export const INVALIDAR_APOS_PEI = [["peis"], ["painel"], ["comunicacoes"], ["notificacoes"]] as const;
 
 /**

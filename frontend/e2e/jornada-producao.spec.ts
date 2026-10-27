@@ -1,12 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { entrar, sair, tokenDe } from "./apoio";
-
-const diaCuiaba = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Cuiaba" }).format(d);
-const somarDias = (dia: string, n: number) => diaCuiaba(new Date(new Date(`${dia}T12:00:00Z`).getTime() + n * 86_400_000));
+import { hojeCivil, entrar, sair, somarDias, tokenDe } from "./apoio";
 
 /** Segunda-feira da semana passada (a semana só fecha depois de encerrada). */
 function segundaPassada(): string {
-  const hoje = diaCuiaba(new Date());
+  const hoje = hojeCivil(new Date());
   const diaDaSemana = new Date(`${hoje}T12:00:00Z`).getUTCDay();
   return somarDias(hoje, -((diaDaSemana + 6) % 7) - 7);
 }

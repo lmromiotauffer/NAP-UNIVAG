@@ -8,7 +8,12 @@ public record ProfissionalDto(Guid Id, string Nome, bool Ativo = true);
 /// <summary>Profissional na produção; <c>DesativadoEm</c> nula com <c>Ativo = false</c> = desativado antes de a data ser registrada;
 /// <c>AtivoDesde</c> nula = criado antes de a data ser registrada (sem limite inferior).</summary>
 public record ProfissionalProducaoDto(Guid Id, string Nome, bool Ativo, DateOnly? DesativadoEm, string Perfil = Perfis.ProfissionalNap,
-    DateOnly? AtivoDesde = null);
+    DateOnly? AtivoDesde = null, DateOnly? ReativadoEm = null)
+{
+    /// <summary></summary>
+    public bool InativoEm(DateOnly data) =>
+        (!Ativo || ReativadoEm is not null) && data >= (DesativadoEm ?? DateOnly.MinValue) && data < (ReativadoEm ?? DateOnly.MaxValue);
+}
 
 public record UsuarioResumoDto(Guid Id, string Nome, string Perfil, Guid? CursoId, bool Ativo);
 

@@ -151,8 +151,8 @@ public class Mensagem : AgregadoComEventos
     private void Preencher(TipoMensagem tipo, string assunto, string corpo, Guid? destinatarioId, Guid? cursoId,
         Guid? alunoId, Guid? encaminhamentoId)
     {
-        var assuntoValido = ValidarTexto(assunto, 3, 200, "O assunto");
-        var corpoValido = ValidarTexto(corpo, 1, 10000, "O corpo");
+        var assuntoValido = Texto.Validar(assunto, 3, 200, "O assunto");
+        var corpoValido = Texto.Validar(corpo, 1, 10000, "O corpo");
         if (destinatarioId == AutorId)
             throw new DomainException("O destinatário deve ser diferente do remetente.");
         Tipo = tipo;
@@ -162,13 +162,5 @@ public class Mensagem : AgregadoComEventos
         CursoId = cursoId;
         AlunoId = alunoId;
         EncaminhamentoId = encaminhamentoId;
-    }
-
-    private static string ValidarTexto(string? texto, int minimo, int maximo, string nome)
-    {
-        texto = (texto ?? string.Empty).Trim();
-        if (texto.Length < minimo || texto.Length > maximo)
-            throw new DomainException($"{nome} deve ter de {minimo} a {maximo} caracteres.");
-        return texto;
     }
 }

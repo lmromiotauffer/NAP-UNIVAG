@@ -14,7 +14,7 @@ public class CompromissoTests
         IntervaloHorario.Criar(new(2026, 3, 2, h, 0, 0, TimeSpan.Zero), new(2026, 3, 2, h + 1, 0, 0, TimeSpan.Zero));
 
     internal static Compromisso Novo(TipoCompromisso tipo = TipoCompromisso.Atendimento, Guid? alunoId = null) =>
-        Compromisso.Criar(tipo, "Título", Intervalo(), Guid.CreateVersion7(), alunoId, null, Autor, Agora);
+        Compromisso.Criar(tipo, "Título", Intervalo(), Guid.CreateVersion7(), alunoId, null, Autor);
 
     [Fact]
     public void Lembrete_nao_ocupa_horario()
@@ -37,26 +37,26 @@ public class CompromissoTests
     [Fact]
     public void Titulo_vazio_ou_longo_falha()
     {
-        Assert.Throws<DomainException>(() => Compromisso.Criar(TipoCompromisso.Bloqueio, " ", Intervalo(), Guid.CreateVersion7(), null, null, Autor, Agora));
-        Assert.Throws<DomainException>(() => Compromisso.Criar(TipoCompromisso.Bloqueio, new string('x', 121), Intervalo(), Guid.CreateVersion7(), null, null, Autor, Agora));
+        Assert.Throws<DomainException>(() => Compromisso.Criar(TipoCompromisso.Bloqueio, " ", Intervalo(), Guid.CreateVersion7(), null, null, Autor));
+        Assert.Throws<DomainException>(() => Compromisso.Criar(TipoCompromisso.Bloqueio, new string('x', 121), Intervalo(), Guid.CreateVersion7(), null, null, Autor));
     }
 
     [Fact]
     public void GrupoId_e_definido_na_criacao_e_mantido_ao_remarcar()
     {
         var grupo = Guid.CreateVersion7();
-        var original = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Título", Intervalo(), Guid.CreateVersion7(), null, null, Autor, Agora, grupo);
+        var original = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Título", Intervalo(), Guid.CreateVersion7(), null, null, Autor, grupo);
 
         Assert.Equal(grupo, original.GrupoId);
-        Assert.Equal(grupo, original.Remarcar(Intervalo(9), Autor, Agora).GrupoId);
-        Assert.Null(Compromisso.Criar(TipoCompromisso.Bloqueio, "Título", Intervalo(), Guid.CreateVersion7(), null, null, Autor, Agora).GrupoId);
+        Assert.Equal(grupo, original.Remarcar(Intervalo(9), Autor).GrupoId);
+        Assert.Null(Compromisso.Criar(TipoCompromisso.Bloqueio, "Título", Intervalo(), Guid.CreateVersion7(), null, null, Autor).GrupoId);
     }
 
     [Fact]
     public void Remarcar_preserva_vinculo_entre_original_e_novo()
     {
         var original = Novo(alunoId: Guid.CreateVersion7());
-        var novo = original.Remarcar(Intervalo(9), Autor, Agora);
+        var novo = original.Remarcar(Intervalo(9), Autor);
 
         Assert.Equal(original.Id, novo.RemarcadoDeId);
         Assert.Equal(novo.Id, original.RemarcadoParaId);
@@ -69,24 +69,24 @@ public class CompromissoTests
     public void Compromisso_cancelado_nao_pode_ser_concluido()
     {
         var c = Novo(alunoId: Guid.CreateVersion7());
-        c.Cancelar("Aluno desistiu", Autor, Agora);
+        c.Cancelar("Aluno desistiu");
         Assert.Equal("Aluno desistiu", c.MotivoCancelamento);
         Assert.Throws<DomainException>(() => c.Concluir(Guid.CreateVersion7()));
-        Assert.Throws<DomainException>(() => c.Remarcar(Intervalo(9), Autor, Agora));
+        Assert.Throws<DomainException>(() => c.Remarcar(Intervalo(9), Autor));
         Assert.Throws<DomainException>(() => c.Atualizar("Novo", null));
     }
 
     [Fact]
     public void Cancelar_exige_motivo() =>
-        Assert.Throws<DomainException>(() => Novo(alunoId: Guid.CreateVersion7()).Cancelar(" ", Autor, Agora));
+        Assert.Throws<DomainException>(() => Novo(alunoId: Guid.CreateVersion7()).Cancelar(" "));
 
     [Fact]
     public void Escala_padrao_sexta_sem_atendimento()
     {
-        var sexta = Assert.Single(EscalaPadrao.Faixas, f => f.Dia == DayOfWeek.Friday);
+        var sexta = Assert.Single(EscalaPadrao.FaixasEscala, f => f.Dia == DayOfWeek.Friday);
         Assert.True(sexta.SemAtendimento);
-        Assert.Equal(4, EscalaPadrao.Faixas.Count(f => !f.SemAtendimento));
-        Assert.All(EscalaPadrao.Faixas, f =>
+        Assert.Equal(4, EscalaPadrao.FaixasEscala.Count(f => !f.SemAtendimento));
+        Assert.All(EscalaPadrao.FaixasEscala, f =>
         {
             Assert.Equal(new TimeOnly(7, 0), f.Inicio);
             Assert.Equal(new TimeOnly(17, 0), f.Fim);
@@ -97,16 +97,16 @@ public class CompromissoTests
     [InlineData("ab")]
     [InlineData(null)]
     public void Cancelar_motivo_curto_falha(string? motivo) =>
-        Assert.Throws<DomainException>(() => Novo(alunoId: Guid.CreateVersion7()).Cancelar(motivo!, Autor, Agora));
+        Assert.Throws<DomainException>(() => Novo(alunoId: Guid.CreateVersion7()).Cancelar(motivo!));
 
     [Fact]
     public void Cancelar_motivo_longo_falha() =>
-        Assert.Throws<DomainException>(() => Novo(alunoId: Guid.CreateVersion7()).Cancelar(new string('x', 501), Autor, Agora));
+        Assert.Throws<DomainException>(() => Novo(alunoId: Guid.CreateVersion7()).Cancelar(new string('x', 501)));
 
     [Fact]
     public void Realizacao_so_depois_do_termino()
     {
-        var futuro = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião", Intervalo(12), Guid.CreateVersion7(), null, null, Autor, Agora);
+        var futuro = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião", Intervalo(12), Guid.CreateVersion7(), null, null, Autor);
         var ex = Assert.Throws<DomainException>(() => futuro.RegistrarRealizacao(Intervalo(10), Autor, Agora));
         Assert.Equal("Só é possível registrar a realização depois do término.", ex.Message);
 
@@ -202,7 +202,7 @@ public class CompromissoTests
         Assert.Equal(CategoriaProducao.ElaboracaoPei, TipoCompromisso.ElaboracaoPei.CategoriaDe());
         Assert.Equal(CategoriaProducao.Administrativo, TipoCompromisso.TarefaAdministrativa.CategoriaDe());
         Assert.Equal(CategoriaProducao.Administrativo, TipoCompromisso.EncaminhamentoDevolutiva.CategoriaDe());
-        Assert.Equal(CategoriaProducao.AtividadesCursos, TipoCompromisso.AtividadeCurso.CategoriaDe());
+        Assert.Null(TipoCompromisso.AtividadeCurso.CategoriaDe());
         Assert.Null(TipoCompromisso.Atendimento.CategoriaDe());
         Assert.Null(TipoCompromisso.Bloqueio.CategoriaDe());
         Assert.Null(TipoCompromisso.Lembrete.CategoriaDe());
@@ -212,7 +212,7 @@ public class CompromissoTests
     public void Cancelar_depois_do_termino_e_permitido()
     {
         var c = Novo(TipoCompromisso.ReuniaoEquipe);
-        c.Cancelar("Não realizada", Autor, Agora.AddDays(3));
+        c.Cancelar("Não realizada");
         Assert.Equal(EstadoCompromisso.Cancelado, c.Estado);
     }
 }

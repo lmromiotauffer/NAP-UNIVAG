@@ -14,6 +14,7 @@ import { useToast } from "../../components/ui/Toast";
 import { mensagemErro } from "../../lib/api";
 import { cn } from "../../lib/cn";
 import { formatarDataHora } from "../../lib/format";
+import { destinoSeguro } from "../../lib/navegacao";
 import type { MensagemDetalhe } from "../../lib/types";
 import { EscreverMensagem } from "./components/EscreverMensagem";
 import { ResponderMensagem } from "./components/ResponderMensagem";
@@ -77,6 +78,8 @@ function Enviada({ m }: { m: MensagemDetalhe }) {
   const toast = useToast();
   const arquivar = useArquivarMensagem();
   const [respondendo, setRespondendo] = useState(false);
+  // Só a resposta que entra depois da montagem chega animada: na abertura a seção já vem com o surgir do <main>.
+  const [tamanhoInicialDoFio] = useState(m.fio.length);
 
   async function alternarArquivo() {
     try {
@@ -133,8 +136,9 @@ function Enviada({ m }: { m: MensagemDetalhe }) {
 
       <section aria-label="Conversa" className={cn(classeSecao, "max-w-3xl")}>
         <ol className="m-0 flex list-none flex-col gap-4 p-0">
-          {m.fio.map((f) => (
-            <li key={f.id} aria-current={f.id === m.id || undefined} className="flex flex-col gap-1 border-b border-borda pb-4 last:border-b-0 last:pb-0">
+          {m.fio.map((f, i) => (
+            // Fio em ordem cronológica: depois de responder só a resposta nova monta, e chega animada no fim da conversa.
+            <li key={f.id} aria-current={f.id === m.id || undefined} className={cn("flex flex-col gap-1 border-b border-borda pb-4 last:border-b-0 last:pb-0", i >= tamanhoInicialDoFio && "animate-surgir")}>
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-denso">
                 <strong className="font-semibold">{f.remetente}</strong>
                 <span className="text-xs text-suave tabular-nums">{formatarDataHora(f.enviadaEm)}</span>
@@ -171,7 +175,7 @@ export function DetalheMensagemPage() {
   const marcadas = useRef(new Set<string>());
   const m = detalhe.data;
   const origem = (useLocation().state as { voltar?: string } | null)?.voltar;
-  const voltarPara = origem?.startsWith("/") && !origem.startsWith("//") && !origem.startsWith("/\\") ? origem : "/comunicacoes";
+  const voltarPara = destinoSeguro(origem, "/comunicacoes");
 
   useEffect(() => {
     if (!m?.podeMarcarLida || marcadas.current.has(m.id)) return;

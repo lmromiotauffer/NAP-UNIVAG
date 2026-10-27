@@ -16,7 +16,7 @@ export function BlocoAtividades({ dados, podeAbrir }: { dados: NonNullable<Paine
           Atividades nos cursos
         </h2>
         {podeAbrir && (
-          <Link to="/atividades" className="inline-flex items-center text-rotulo font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
+          <Link to="/atividades" className="inline-flex items-center rounded-sm text-xs font-semibold text-primaria underline-offset-2 hover:underline pointer-coarse:min-h-11">
             Ver atividades
           </Link>
         )}

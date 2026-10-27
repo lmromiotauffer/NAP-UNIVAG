@@ -12,12 +12,15 @@ public class ObterDocumentoValidator : AbstractValidator<ObterDocumentoQuery>
 }
 
 public sealed class ObterDocumentoHandler(IValidator<ObterDocumentoQuery> validador, IDocumentoQueries consultas,
-    IUsuarioAtual usuario)
+    IUsuarioAtual usuario, IAuditoria auditoria, IUnidadeDeTrabalho uow)
 {
     public async Task<DocumentoDto> Handle(ObterDocumentoQuery query, CancellationToken ct = default)
     {
         await validador.ValidarAsync(query, ct);
         var escopo = EscopoDocumentos.Para(usuario, query.IncluirArquivados);
-        return await consultas.ObterAsync(query.Id, escopo, ct) ?? throw new NotFoundException("Documento");
+        var documento = await consultas.ObterAsync(query.Id, escopo, ct) ?? throw new NotFoundException("Documento");
+        auditoria.Registrar("documento.consulta", "Documento", query.Id);
+        await uow.SalvarAsync(ct);
+        return documento;
     }
 }

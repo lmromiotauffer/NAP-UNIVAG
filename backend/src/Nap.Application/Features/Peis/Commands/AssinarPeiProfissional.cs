@@ -32,9 +32,9 @@ public sealed class AssinarPeiProfissionalHandler(IValidator<AssinarPeiProfissio
         var agora = relogio.Agora;
         var evidencia = await assinaturas.AssinarAsync(versao.Id, PapelAssinatura.Profissional, nome, hash, agora, ct);
 
-        versao.RegistrarAssinatura(PapelAssinatura.Profissional, usuario.Id, nome, hash, evidencia.Evidencia, agora);
+        versao.RegistrarAssinatura(PapelAssinatura.Profissional, usuario.Id, nome, hash, evidencia.Evidencia, agora, evidencia.Metodo);
         // A auditoria só guarda ids: o papel fica na assinatura referenciada.
-        var assinatura = versao.Assinaturas.Single(a => a.Papel == PapelAssinatura.Profissional);
+        var assinatura = versao.AssinaturaValida(PapelAssinatura.Profissional)!;
         auditoria.Registrar("pei.assinar", "AssinaturaPei", assinatura.Id);
         await uow.SalvarAsync(ct);
         await cache.InvalidarAreaAsync(ct);

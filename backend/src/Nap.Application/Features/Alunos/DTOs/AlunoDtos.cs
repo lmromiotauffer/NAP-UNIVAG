@@ -2,13 +2,16 @@ using Nap.Domain.Alunos;
 
 namespace Nap.Application.Features.Alunos;
 
-public record AlunoListaDto(Guid Id, string Nome, string Matricula, Guid CursoId, string Curso, int Semestre,
-    Guid ProfissionalId, string Profissional, SituacaoAluno Situacao, int? TotalAtendimentos, int? TotalFaltas);
+/// <summary>Para o coordenador de curso de um aluno já transferido para outro curso, o estado atual (curso, profissional,
+/// situação e textos) chega <c>null</c>/vazio: ele só vê o período em que coordenava.</summary>
+public record AlunoListaDto(Guid Id, string Nome, string Matricula, bool? MatriculaAtiva, Guid? CursoId, string Curso, int? Semestre,
+    Guid? ProfissionalId, string Profissional, SituacaoAluno? Situacao, int? TotalAtendimentos, int? TotalFaltas);
 
 public record ResumoAcompanhamentoDto(int TotalAtendimentos, int TotalFaltas, DateTimeOffset? UltimoAtendimento);
 
-public record AlunoFichaDto(Guid Id, string Nome, string Matricula, Guid CursoId, string Curso, int Semestre,
-    Guid ProfissionalId, string Profissional, SituacaoAluno Situacao, DateOnly InicioAcompanhamento,
+/// <summary>Mesmo recorte de <see cref="AlunoListaDto"/> para o coordenador de um aluno já transferido.</summary>
+public record AlunoFichaDto(Guid Id, string Nome, string Matricula, bool? MatriculaAtiva, Guid? CursoId, string Curso, int? Semestre,
+    Guid? ProfissionalId, string Profissional, SituacaoAluno? Situacao, DateOnly InicioAcompanhamento,
     string? NecessidadesEducacionais, string? ObservacoesAcademicas, ResumoAcompanhamentoDto? Resumo,
     string Versao);
 

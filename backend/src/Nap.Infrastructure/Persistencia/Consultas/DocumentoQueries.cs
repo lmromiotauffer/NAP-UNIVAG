@@ -12,7 +12,8 @@ public sealed class DocumentoQueries(NapDbContext db) : IDocumentoQueries
     {
         // Mesmo recorte de alunos: o coordenador só alcança a ficha de aluno que passou pelo curso dele.
         var curso = e.SomenteCursoId;
-        if (!await db.Alunos.AnyAsync(a => a.Id == alunoId && (curso == null || a.HistoricoCursos.Any(v => v.CursoId == curso)), ct)) return null;
+        var aluno = db.Alunos.Where(a => a.Id == alunoId);
+        if (!await (curso is { } c ? aluno.Where(AlunoQueries.PassouPeloCurso(c)) : aluno).AnyAsync(ct)) return null;
 
         var q = NoEscopo(e).Where(d => d.AlunoId == alunoId);
         var total = await q.CountAsync(ct);

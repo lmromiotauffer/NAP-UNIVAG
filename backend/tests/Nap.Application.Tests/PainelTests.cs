@@ -195,6 +195,10 @@ public class PainelTests
         Assert.Equal(prof, _consultas.ContagemRecebida!.Value.SolicitanteId);
         Assert.Equal(prof, _consultas.SemanaRecebida!.Value.ProfissionalId);
         Assert.Equal(curso, _consultas.SemanaRecebida!.Value.CursoId);
+        // Encaminhamentos também seguem o filtro de curso, sem perder motivo e observações da equipe.
+        var escopo = _consultas.ContagemRecebida!.Value.Escopo;
+        Assert.Equal((false, curso, true, true), (escopo.Todos, escopo.SomenteCursoId, escopo.VerMotivo, escopo.VerObservacoes));
+        Assert.Equal(escopo, _consultas.AlertasEncaminhamentoRecebidos!.Value.Escopo);
     }
 
     [Fact]
@@ -211,20 +215,20 @@ public class PainelTests
     }
 
     [Fact]
-    public async Task Periodo_padrao_e_a_segunda_da_semana_corrente_parcial_com_fim_na_sexta()
+    public async Task Periodo_padrao_e_a_segunda_da_semana_corrente_parcial_com_fim_no_domingo()
     {
         var dto = await Obter(new UsuarioAtualFalso(Perfis.CoordenadorNap));
-        Assert.Equal(new PeriodoDto(Segunda, Segunda.AddDays(4), true), dto.Periodo);
-        Assert.Equal((Segunda, Segunda.AddDays(4)), (_consultas.SemanaRecebida!.Value.Inicio, _consultas.SemanaRecebida!.Value.Fim));
+        Assert.Equal(new PeriodoDto(Segunda, Segunda.AddDays(6), true), dto.Periodo);
+        Assert.Equal((Segunda, Segunda.AddDays(6)), (_consultas.SemanaRecebida!.Value.Inicio, _consultas.SemanaRecebida!.Value.Fim));
     }
 
     [Fact]
-    public async Task No_sabado_a_semana_corrente_ja_nao_e_parcial()
+    public async Task No_sabado_a_semana_corrente_ainda_e_parcial()
     {
         var sabado = new RelogioFixo { Agora = new DateTimeOffset(2026, 10, 3, 12, 0, 0, TimeSpan.Zero) };
         var dto = await new ObterPainelHandler(new ObterPainelValidator(), _consultas, _cache, new ConfiguracaoAlertasFalsa(_opcoes),
             new UsuarioAtualFalso(Perfis.CoordenadorNap), sabado).Handle(new ObterPainelQuery(), TestContext.Current.CancellationToken);
-        Assert.Equal(new PeriodoDto(Segunda, Segunda.AddDays(4), false), dto.Periodo);
+        Assert.Equal(new PeriodoDto(Segunda, Segunda.AddDays(6), true), dto.Periodo);
     }
 
     [Fact]

@@ -10,7 +10,8 @@ public sealed class ServicoEscala(IEscalaRepository escalas, IFeriadoRepository 
     public async Task<FaixaEscala?> FaixaVigenteAsync(Guid profissionalId, DateOnly data, CancellationToken ct) =>
         FaixaDe(await escalas.ObterVigenteAsync(profissionalId, data, ct), data);
 
-    /// <summary>Sem escala vigente, vale a padrão.</summary>
+    /// <summary>Sem escala vigente, vale a padrão. Decisão: na agenda isso inclui o Administrador (pode marcar reuniões das 07h
+    /// às 17h), mas a produção não lhe dá capacidade sem escala própria (ObterProducao); admin que atende cadastra escala.</summary>
     public static FaixaEscala? FaixaDe(EscalaProfissional? escala, DateOnly data) =>
         escala is null ? EscalaPadrao.FaixasEscala.SingleOrDefault(f => f.Dia == data.DayOfWeek) : escala.FaixaDe(data.DayOfWeek);
 

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Nap.Api.Contratos;
 using Nap.Api.Infra;
 using Nap.Application.Features.Peis.Commands;
@@ -15,6 +16,7 @@ namespace Nap.Api.Controllers;
 [Route("api/assinar")]
 [AllowAnonymous]
 [SemRastro]
+[EnableRateLimiting(LimiteLogin.PoliticaAssinatura)]
 public class AssinaturaPeiController : ControllerBase
 {
     [HttpPost("abrir")]

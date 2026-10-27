@@ -38,7 +38,7 @@ public class Documento : Entidade
         AlunoId = alunoId,
         CursoId = cursoId,
         Categoria = categoria,
-        Descricao = ValidarTexto(descricao, "A descrição"),
+        Descricao = Texto.Validar(descricao, 3, 500, "A descrição"),
         NomeArquivo = SanearNome(nomeArquivo),
         TipoConteudo = tipoConteudo,
         TamanhoBytes = tamanhoBytes,
@@ -56,13 +56,16 @@ public class Documento : Entidade
         Categoria = categoria;
     }
 
-    public void Compartilhar(string justificativa, Guid autorId, DateTimeOffset agora)
+    /// <summary>O curso que passa a ver é o atual do aluno: depois de uma transferência, o compartilhamento vai para quem
+    /// o acompanha hoje, não para o curso da época do upload.</summary>
+    public void Compartilhar(string justificativa, Guid autorId, Guid cursoAtualAlunoId, DateTimeOffset agora)
     {
         ExigirNaoArquivado();
-        var texto = ValidarTexto(justificativa, "A justificativa");
+        var texto = Texto.Validar(justificativa, 3, 500, "A justificativa");
         if (Visibilidade == VisibilidadeDocumento.CompartilhadoCoordenacao)
             throw new DomainException("O documento já está compartilhado com a coordenação.");
         Visibilidade = VisibilidadeDocumento.CompartilhadoCoordenacao;
+        CursoId = cursoAtualAlunoId;
         CompartilhadoEm = agora;
         CompartilhadoPorId = autorId;
         CompartilhadoJustificativa = texto;
@@ -72,7 +75,7 @@ public class Documento : Entidade
     public void RevogarCompartilhamento(string justificativa, Guid autorId, DateTimeOffset agora)
     {
         ExigirNaoArquivado();
-        var texto = ValidarTexto(justificativa, "A justificativa");
+        var texto = Texto.Validar(justificativa, 3, 500, "A justificativa");
         if (Visibilidade == VisibilidadeDocumento.RestritoNap)
             throw new DomainException("O documento não está compartilhado com a coordenação.");
         Visibilidade = VisibilidadeDocumento.RestritoNap;
@@ -85,7 +88,7 @@ public class Documento : Entidade
     public void Arquivar(string motivo, Guid autorId, DateTimeOffset agora)
     {
         ExigirNaoArquivado();
-        var texto = ValidarTexto(motivo, "O motivo");
+        var texto = Texto.Validar(motivo, 3, 500, "O motivo");
         ArquivadoEm = agora;
         ArquivadoPorId = autorId;
         ArquivadoMotivo = texto;
@@ -107,13 +110,5 @@ public class Documento : Entidade
         var ext = Path.GetExtension(limpo);
         if (ext.Length > 20) ext = string.Empty;
         return Texto.Truncar(limpo[..^ext.Length], 200 - ext.Length) + ext;
-    }
-
-    private static string ValidarTexto(string? texto, string nome)
-    {
-        texto = (texto ?? string.Empty).Trim();
-        if (texto.Length is < 3 or > 500)
-            throw new DomainException($"{nome} deve ter de 3 a 500 caracteres.");
-        return texto;
     }
 }

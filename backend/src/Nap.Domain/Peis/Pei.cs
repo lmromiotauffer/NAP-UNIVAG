@@ -18,6 +18,8 @@ public class Pei : Entidade
 
     public VersaoPei? VersaoAberta => _versoes.SingleOrDefault(v => v.Aberta);
 
+    public bool ImpedeNovaVersao => _versoes.Any(v => VersaoPei.EstadosQueImpedemNovaVersao.Contains(v.Estado));
+
     public VersaoPei? VersaoPublicada => _versoes.SingleOrDefault(v => v.Estado == EstadoVersaoPei.Publicada);
 
     private Pei() { } // ORM
@@ -37,15 +39,15 @@ public class Pei : Entidade
 
     public VersaoPei NovaVersao(Guid autorId, DateTimeOffset agora)
     {
-        if (!PodeCriarNovaVersao(VersaoAberta is not null))
-            throw new DomainException("Já existe uma versão do PEI em andamento.");
+        if (!PodeCriarNovaVersao(ImpedeNovaVersao))
+            throw new DomainException("Já existe uma versão do PEI em andamento ou assinada aguardando publicação.");
         var ultima = _versoes.MaxBy(v => v.Numero)!;
         var nova = VersaoPei.Criar(Id, ultima.Numero + 1, ultima.Conteudo, autorId, agora);
         _versoes.Add(nova);
         return nova;
     }
 
-    public static bool PodeCriarNovaVersao(bool temVersaoAberta) => !temVersaoAberta;
+    public static bool PodeCriarNovaVersao(bool impedeNovaVersao) => !impedeNovaVersao;
 
     public static bool EhMaisRecente(int numero, int maiorNumero) => numero == maiorNumero;
 

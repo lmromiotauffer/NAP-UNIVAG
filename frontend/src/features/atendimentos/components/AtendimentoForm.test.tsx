@@ -77,6 +77,6 @@ describe("AtendimentoForm", () => {
     const { user } = montar();
     await user.selectOptions(screen.getByLabelText(/^Tipo/), "OrientacaoAcademica");
     expect(screen.getByRole("option", { name: "Orientação acadêmica" })).toBeInTheDocument();
-    expect(screen.getByText("Registro interno do NAP; não gera retorno de outro setor")).toBeInTheDocument();
+    expect(screen.getByText("Registro interno do NAP; não gera retorno de outro setor.")).toBeInTheDocument();
   });
 });

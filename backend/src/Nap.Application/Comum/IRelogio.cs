@@ -24,4 +24,8 @@ public static class FusoExtensoes
     /// <summary>Data civil do instante no fuso informado.</summary>
     public static DateOnly DataLocal(this TimeZoneInfo fuso, DateTimeOffset instante) =>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instante, fuso).DateTime);
+
+    /// <summary>Hora civil do instante no fuso informado.</summary>
+    public static TimeOnly HoraLocal(this TimeZoneInfo fuso, DateTimeOffset instante) =>
+        TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(instante, fuso).DateTime);
 }

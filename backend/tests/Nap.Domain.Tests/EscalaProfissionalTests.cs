@@ -91,9 +91,8 @@ public class EscalaProfissionalTests
     }
 
     [Fact]
-    public void Escala_padrao_expoe_as_mesmas_faixas_como_vo()
+    public void Escala_padrao_e_valida_como_escala_profissional()
     {
-        Assert.Equal(EscalaPadrao.Faixas.Count, EscalaPadrao.FaixasEscala.Count);
         _ = EscalaProfissional.Criar(Profissional, D1, null, EscalaPadrao.FaixasEscala);
     }
 }

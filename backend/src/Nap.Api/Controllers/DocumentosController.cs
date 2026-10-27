@@ -29,7 +29,7 @@ public class DocumentosController : ControllerBase
         handler.Handle(new ObterDocumentoQuery(id, incluirArquivados), ct);
 
     [HttpPost("/api/alunos/{alunoId:guid}/documentos")]
-    [Authorize(Policy = Politicas.EquipeNap)]
+    [Authorize(Policy = Politicas.PodeAnexarDocumentos)]
     [Idempotente(nameof(Obter))]
     [RequestSizeLimit(TetoCorpoBytes)]
     [RequestFormLimits(MultipartBodyLengthLimit = TetoCorpoBytes)]

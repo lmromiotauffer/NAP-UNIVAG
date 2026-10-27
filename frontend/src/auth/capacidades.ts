@@ -13,6 +13,7 @@
  * PodeUsarComunicacoes      → "comunicacoes"           (todos exceto Gestao; inclui a aba Notificações)
  * PodeConsultarEncaminhamentos → "encaminhamentos"       (Equipe NAP + Sip + CoordenadorCurso)
  * EquipeNap (POST encaminhamentos) → "encaminhamentos.criar" (Equipe NAP)
+ * PodeAnexarDocumentos       → "documentos.anexar"      (Equipe NAP + CoordenadorCurso; só aluno do próprio curso, isso fica no handler)
  * EquipeNap (escrita de documentos)  → "documentos.gerenciar"  (Equipe NAP; ler a aba segue "alunos.consultar")
  * PodeConsultarPeis          → "peis"                   (Equipe NAP + CoordenadorCurso; a API recorta por perfil)
  * PodePublicarPei            → "peis.publicar"          (Administrador + CoordenadorNap: aprovar revisão, devolver, publicar)
@@ -39,6 +40,7 @@ export type Capacidade =
   | "atividades.registrar"
   | "encaminhamentos"
   | "encaminhamentos.criar"
+  | "documentos.anexar"
   | "documentos.gerenciar"
   | "peis"
   | "peis.publicar"
@@ -58,6 +60,7 @@ const EQUIPE_NAP: Capacidade[] = [
   "atividades.registrar",
   "encaminhamentos",
   "encaminhamentos.criar",
+  "documentos.anexar",
   "documentos.gerenciar",
   "peis",
   "producao",
@@ -67,7 +70,7 @@ export const MATRIZ: Record<Perfil, Capacidade[]> = {
   Administrador: [...EQUIPE_NAP, "peis.publicar", "producao.gerir", "administracao"],
   CoordenadorNap: [...EQUIPE_NAP, "peis.publicar", "producao.gerir", "administracao"],
   ProfissionalNap: EQUIPE_NAP,
-  CoordenadorCurso: ["painel", "comunicacoes", "alunos.consultar", "atividades", "encaminhamentos", "peis", "producao"],
+  CoordenadorCurso: ["painel", "comunicacoes", "alunos.consultar", "atividades", "encaminhamentos", "documentos.anexar", "peis", "producao"],
   Sip: ["painel", "comunicacoes", "encaminhamentos"],
   Gestao: ["painel", "producao"],
 };

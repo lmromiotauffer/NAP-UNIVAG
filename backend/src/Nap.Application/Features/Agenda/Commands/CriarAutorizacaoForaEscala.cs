@@ -13,6 +13,7 @@ public class CriarAutorizacaoForaEscalaValidator : AbstractValidator<CriarAutori
     public CriarAutorizacaoForaEscalaValidator()
     {
         RuleFor(x => x.ProfissionalId).NotEmpty().WithMessage("Informe o profissional.");
+        RuleFor(x => x.Fim).IntervaloValido(x => x.Inicio);
         RuleFor(x => x.Justificativa).Must(j => j?.Trim().Length is >= 5 and <= 500)
             .WithMessage("A justificativa da autorização é obrigatória e deve ter de 5 a 500 caracteres.");
     }

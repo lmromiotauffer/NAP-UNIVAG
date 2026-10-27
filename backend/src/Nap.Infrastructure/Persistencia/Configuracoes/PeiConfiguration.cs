@@ -18,7 +18,7 @@ public class PeiConfiguration : IEntityTypeConfiguration<Pei>
         builder.HasOne<Aluno>().WithMany().HasForeignKey(p => p.AlunoId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<UsuarioIdentidade>().WithMany().HasForeignKey(p => p.ProfissionalResponsavelId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<UsuarioIdentidade>().WithMany().HasForeignKey(p => p.CriadoPorId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasIndex(p => p.AlunoId);
+        builder.HasIndex(p => p.AlunoId).IsUnique(); // um PEI por aluno; o histórico fica nas versões
         builder.HasIndex(p => p.ProfissionalResponsavelId);
 
         builder.HasMany(p => p.Versoes).WithOne().HasForeignKey(v => v.PeiId).IsRequired().OnDelete(DeleteBehavior.Cascade);

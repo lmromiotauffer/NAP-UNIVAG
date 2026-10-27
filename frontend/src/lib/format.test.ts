@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatarDataCivil, formatarDataLonga, formatarDiaSemana, formatarSemana, formatarTamanho, hojeCivil, horaCivil, instanteCivil, saudacao, segundaDoDia, somarDias } from "./format";
+import { diasEntre, diaValido, formatarDataCivil, formatarDataLonga, formatarDiaSemana, formatarSemana, formatarTamanho, hojeCivil, horaCivil, instanteCivil, minutosDoDia, saudacao, segundaDoDia, somarDias } from "./format";
 import {
   diaCivil,
   formatarData,
@@ -111,6 +111,7 @@ describe("agenda: semana civil em Cuiabá", () => {
     expect(formatarSemana("2026-09-28")).toBe("28 set – 2 out 2026");
     expect(formatarSemana("2026-10-05")).toBe("5 – 9 out 2026");
     expect(formatarSemana("2025-12-29")).toBe("29 dez 2025 – 2 jan 2026");
+    expect(formatarSemana("2026-10-05", 6)).toBe("5 – 11 out 2026");
   });
 
   it("rotulo_do_dia_da_semana", () => {
@@ -126,5 +127,30 @@ describe("formatarTamanho", () => {
     expect(formatarTamanho(1258291)).toBe("1,2 MB");
     expect(formatarTamanho(5242880)).toBe("5 MB");
     expect(formatarTamanho(null)).toBe("—");
+  });
+});
+
+describe("diaValido e minutosDoDia", () => {
+  it("Dia_inexistente_ou_mal_formado_e_invalido", () => {
+    expect(diaValido("2026-02-28")).toBe(true);
+    expect(diaValido("2026-02-30")).toBe(false);
+    expect(diaValido("2026-2-1")).toBe(false);
+    expect(diaValido("")).toBe(false);
+  });
+
+  it("Hora_com_ou_sem_segundos_vira_minutos_do_dia", () => {
+    expect(minutosDoDia("07:30")).toBe(450);
+    expect(minutosDoDia("17:00:00")).toBe(1020);
+  });
+});
+
+describe("diasEntre", () => {
+  it("conta_dias_civis_inclusive_na_virada_de_mes_e_de_ano", () => {
+    expect(diasEntre("2026-09-28", "2026-10-05")).toBe(7);
+    expect(diasEntre("2025-12-30", "2026-01-02")).toBe(3);
+    expect(diasEntre("2026-03-01", "2026-03-01")).toBe(0);
+  });
+  it("e_negativo_quando_o_fim_vem_antes", () => {
+    expect(diasEntre("2026-10-05", "2026-10-01")).toBe(-4);
   });
 });

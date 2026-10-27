@@ -7,12 +7,15 @@ public interface IProducaoQueries
     /// <summary>Pendentes de classificação do profissional na semana (mesma definição de "sem desfecho" do painel).</summary>
     Task<int> ContarPendentesAsync(Guid profissionalId, DateOnly semana, CancellationToken ct);
 
+    /// <summary>Compromissos da semana que ainda não terminaram e ainda vão pedir desfecho (ex.: domingo 23h → segunda 1h).</summary>
+    Task<int> ContarEmAndamentoAsync(Guid profissionalId, DateOnly semana, CancellationToken ct);
+
     /// <summary>Uma linha por profissional e por segunda-feira das semanas que cruzam [<paramref name="inicio"/>, <paramref name="fim"/>].</summary>
     Task<IReadOnlyList<SemanaProducaoDto>> ListarSemanasAsync(IReadOnlyList<ProfissionalDto> profissionais, DateOnly inicio, DateOnly fim,
         CancellationToken ct);
 
     /// <summary>
-    /// Fatos dos profissionais com início (data civil) em [<paramref name="inicio"/>, <paramref name="fim"/>]: escalas, feriados ativos,
+    /// Fatos dos profissionais que tocam [<paramref name="inicio"/>, <paramref name="fim"/>] (datas civis): escalas, feriados ativos,
     /// bloqueios, ocorrências concluídas, pendentes e ajustes. Com <paramref name="cursoId"/>, só atendimentos de alunos do curso,
     /// atividades do curso e pendentes de alunos do curso (capacidade, reuniões e ajustes não se recortam por curso).
     /// </summary>

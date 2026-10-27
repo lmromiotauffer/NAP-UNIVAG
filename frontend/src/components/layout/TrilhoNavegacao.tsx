@@ -28,6 +28,9 @@ export function TrilhoNavegacao({ itens, naoLidas, perfil, aoSair, aoAbrirAjuda 
       const ativo = aside?.querySelector<HTMLElement>('a[aria-current="page"]');
       const fundo = destaque.current;
       if (!aside || !fundo) return;
+      // Sem item visível de onde deslizar (montagem, trilho recém-exibido, rota sem item antes): aparece no lugar, em vez de viajar desde o canto.
+      const semOrigem = fundo.style.opacity !== "1";
+      if (semOrigem) fundo.style.transition = "none";
       fundo.style.opacity = ativo ? "1" : "0";
       if (ativo) {
         // Medida em subpixel (offsetTop arredonda): o fundo fica exatamente sob o item, mesmo com o trilho rolado.
@@ -35,6 +38,10 @@ export function TrilhoNavegacao({ itens, naoLidas, perfil, aoSair, aoAbrirAjuda 
         const item = ativo.getBoundingClientRect();
         fundo.style.height = `${item.height}px`;
         fundo.style.transform = `translate(${item.left - caixa.left}px, ${item.top - caixa.top + aside.scrollTop}px)`;
+      }
+      if (semOrigem) {
+        void fundo.offsetHeight; // fixa a posição antes de devolver a transição
+        fundo.style.transition = "";
       }
     };
     posicionar();

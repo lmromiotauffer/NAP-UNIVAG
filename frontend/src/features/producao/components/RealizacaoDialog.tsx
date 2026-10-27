@@ -8,7 +8,7 @@ import { Field } from "../../../components/ui/Field";
 import { Input } from "../../../components/ui/Input";
 import { Textarea } from "../../../components/ui/Textarea";
 import { tratarErro } from "../../../lib/api";
-import { diaCivil, formatarData, formatarHora, horaCivil, instanteCivil } from "../../../lib/format";
+import { diaCivil, formatarData, formatarIntervalo, horaCivil, instanteCivil } from "../../../lib/format";
 import type { Compromisso } from "../../../lib/types";
 import { CAMPO_DA_API, camposHorario, ListasHorario, validarHorario } from "../../agenda/components/CompromissoForm";
 import { useCorrigirRealizacao, useRegistrarRealizacao } from "../hooks/useProducao";
@@ -73,9 +73,9 @@ export function RealizacaoDialog({
   return (
     <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
       <p className="text-sm text-suave">
-        {correcao ? "Registrado" : "Agendado"}: {formatarData(compromisso.inicio)}, {formatarHora(compromisso.inicio)}–{formatarHora(compromisso.fim)}. Informe o horário em que de fato aconteceu; é ele que conta na produção e ocupa a agenda.
+        {correcao ? "Registrado" : "Agendado"}: {formatarData(compromisso.inicio)}, {formatarIntervalo(compromisso.inicio, compromisso.fim)}. Informe o horário em que de fato aconteceu; é ele que conta na produção e ocupa a agenda.
       </p>
-      {erroGeral && <Alert variante="urgente">{erroGeral}</Alert>}
+      {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
       <div className="grid gap-4 sm:grid-cols-3">
         <Field rotulo="Data" erro={errors.data?.message} obrigatorio>
           <Input type="date" {...register("data")} />
@@ -90,7 +90,7 @@ export function RealizacaoDialog({
       </div>
       {correcao && (
         <Field rotulo="Justificativa da correção" erro={errors.justificativa?.message} obrigatorio>
-          <Textarea {...register("justificativa")} />
+          <Textarea maxLength={500} {...register("justificativa")} />
         </Field>
       )}
       <div className="flex flex-wrap justify-end gap-2">

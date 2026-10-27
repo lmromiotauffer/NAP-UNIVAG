@@ -17,3 +17,14 @@ it("semanas do mesmo mês (rótulo repetido) não geram chave duplicada", () => 
   expect(screen.getAllByRole("img")).toHaveLength(2);
   expect(erro).not.toHaveBeenCalled();
 });
+
+it("semana rotula cada dia pelo dia da semana, não pelo mês", () => {
+  const base = producao();
+  const serie = [
+    { ...base.serie[0]!, inicio: "2026-09-21", fim: "2026-09-21" },
+    { ...base.serie[0]!, inicio: "2026-09-22", fim: "2026-09-22" },
+  ];
+  render(<GraficoSerie producao={producao({ periodo: { ...base.periodo, tipo: "Semana" }, serie })} />);
+  expect(screen.getByRole("img", { name: /^Seg: / })).toBeInTheDocument();
+  expect(screen.getByRole("img", { name: /^Ter: / })).toBeInTheDocument();
+});

@@ -12,12 +12,11 @@ public sealed class PeiQueries(NapDbContext db) : IPeiQueries
     {
         // Mesmo recorte da ficha: coordenador de curso alcança o aluno que passou pelo curso dele (curso da época).
         var curso = e.SomenteCursoId;
-        var alunoNoCurso = await db.Alunos.AsNoTracking()
-            .Where(a => a.Id == alunoId).Select(a => (bool?)(curso == null || a.HistoricoCursos.Any(v => v.CursoId == curso)))
-            .SingleOrDefaultAsync(ct);
-        if (alunoNoCurso is null) return null;
+        var aluno = db.Alunos.AsNoTracking().Where(a => a.Id == alunoId);
+        if (!await aluno.AnyAsync(ct)) return null;
+        var alunoNoCurso = curso is not { } c || await aluno.Where(AlunoQueries.PassouPeloCurso(c)).AnyAsync(ct);
 
-        var linhas = await Visiveis(db.Peis.AsNoTracking().Where(p => p.AlunoId == alunoId).SelectMany(p => p.Versoes), e)
+        var linhas = await Visiveis(db, db.Peis.AsNoTracking().Where(p => p.AlunoId == alunoId).SelectMany(p => p.Versoes), e)
             .Select(v => new
             {
                 v.PeiId, v.Id, v.Numero, v.Estado, Inicio = v.Conteudo.Vigencia.Inicio, Fim = v.Conteudo.Vigencia.Fim, v.PublicadaEm,
@@ -45,7 +44,7 @@ public sealed class PeiQueries(NapDbContext db) : IPeiQueries
     {
         // A demanda interna só entra na consulta (e portanto no SQL) para a Equipe NAP.
         var verDemanda = e.Todos;
-        var linha = await Visiveis(db.Peis.AsNoTracking().SelectMany(p => p.Versoes), e)
+        var linha = await Visiveis(db, db.Peis.AsNoTracking().SelectMany(p => p.Versoes), e)
             .Where(v => v.Id == versaoId)
             .Select(v => new
             {
@@ -55,7 +54,9 @@ public sealed class PeiQueries(NapDbContext db) : IPeiQueries
                 v.Conteudo.RecursosApoio, v.Conteudo.CuidadosPedagogicos,
                 Inicio = v.Conteudo.Vigencia.Inicio, Fim = v.Conteudo.Vigencia.Fim,
                 PublicadaPor = db.Users.Where(us => us.Id == v.PublicadaPorId).Select(us => us.NomeCompleto).FirstOrDefault(),
-                Assinaturas = v.Assinaturas.OrderBy(a => a.Em).ThenBy(a => a.Papel)
+                // Publicada: o curso da publicação (o aluno pode ter sido transferido depois); detalhe e PDF mostram esse.
+                CursoPublicacao = db.Cursos.Where(c => c.Id == v.CursoPublicacaoId).Select(c => c.Nome).FirstOrDefault(),
+                Assinaturas = v.Assinaturas.Where(a => a.InvalidadaEm == null).OrderBy(a => a.Em).ThenBy(a => a.Papel)
                     .Select(a => new { a.Papel, a.NomeSignatario, a.Em, a.Metodo }).ToList(),
                 Ciencias = v.Ciencias.OrderBy(c => c.Em).ThenBy(c => c.Id)
                     .Select(c => new
@@ -72,9 +73,10 @@ public sealed class PeiQueries(NapDbContext db) : IPeiQueries
             .Select(p => new
             {
                 p.AlunoId, p.ProfissionalResponsavelId,
+                CursoAtualAlunoId = db.Alunos.Where(a => a.Id == p.AlunoId).Select(a => (Guid?)a.CursoAtualId).FirstOrDefault(),
                 Responsavel = db.Users.Where(us => us.Id == p.ProfissionalResponsavelId).Select(us => us.NomeCompleto).FirstOrDefault() ?? "",
                 MaisRecente = p.Versoes.Max(x => x.Numero),
-                TemAberta = p.Versoes.Any(x => VersaoPei.EstadosAbertos.Contains(x.Estado)),
+                ImpedeNovaVersao = p.Versoes.Any(x => VersaoPei.EstadosQueImpedemNovaVersao.Contains(x.Estado)),
                 Aluno = db.Alunos.Where(a => a.Id == p.AlunoId)
                     .Select(a => new
                     {
@@ -89,10 +91,14 @@ public sealed class PeiQueries(NapDbContext db) : IPeiQueries
         var acoes = AutorizacaoPei.Acoes(u, new AutorizacaoPei.SituacaoVersao(pei.ProfissionalResponsavelId, linha.CursoPublicacaoId,
             linha.Estado, temPedagogico,
             linha.Assinaturas.Any(a => a.Papel == PapelAssinatura.Profissional), linha.Assinaturas.Any(a => a.Papel == PapelAssinatura.Aluno),
-            Pei.EhMaisRecente(linha.Numero, pei.MaisRecente), pei.TemAberta, linha.Ciencias.Any(c => c.Minha)));
+            Pei.EhMaisRecente(linha.Numero, pei.MaisRecente), pei.ImpedeNovaVersao, linha.Ciencias.Any(c => c.Minha),
+            pei.CursoAtualAlunoId));
 
         return new VersaoPeiDetalheDto(linha.Id, linha.PeiId, pei.AlunoId, pei.Aluno?.NomeCompleto ?? "", pei.Aluno?.Matricula ?? "",
-            pei.Aluno?.Curso ?? "", pei.Responsavel, linha.Numero, linha.Estado,
+            // Versão já assinada pelo profissional: o responsável é quem assinou, mesmo depois de uma troca de responsável.
+            linha.CursoPublicacao ?? pei.Aluno?.Curso ?? "",
+            linha.Assinaturas.FirstOrDefault(a => a.Papel == PapelAssinatura.Profissional)?.NomeSignatario ?? pei.Responsavel,
+            linha.Numero, linha.Estado,
             new ConteudoPeiDto(linha.Demanda, linha.NecessidadesEducacionais, linha.Adaptacoes, linha.OrientacoesProfessores,
                 linha.RecursosApoio, linha.CuidadosPedagogicos, linha.Inicio, linha.Fim),
             linha.HashConteudo,
@@ -102,11 +108,15 @@ public sealed class PeiQueries(NapDbContext db) : IPeiQueries
     }
 
     /// <summary>Recorte por perfil sobre versões: o coordenador de curso só vê as publicadas (inclusive as depois arquivadas)
-    /// no curso da publicação. Compartilhado com o painel.</summary>
-    internal static IQueryable<VersaoPei> Visiveis(IQueryable<VersaoPei> q, EscopoPeis e)
+    /// no curso da publicação e a publicada em vigor do aluno que hoje está no curso dele. Espelha
+    /// <see cref="AutorizacaoPei.PodeVer"/>; compartilhado com o painel.</summary>
+    internal static IQueryable<VersaoPei> Visiveis(NapDbContext db, IQueryable<VersaoPei> q, EscopoPeis e)
     {
         if (e.Todos) return q;
-        if (e.SomenteCursoId is { } curso) return q.Where(v => v.PublicadaEm != null && v.CursoPublicacaoId == curso);
+        if (e.SomenteCursoId is { } curso)
+            return q.Where(v => v.PublicadaEm != null && (v.CursoPublicacaoId == curso
+                || (v.Estado == EstadoVersaoPei.Publicada
+                    && db.Peis.Any(p => p.Id == v.PeiId && db.Alunos.Any(a => a.Id == p.AlunoId && a.CursoAtualId == curso)))));
         return q.Where(_ => false); // escopo sem recorte reconhecido: falha fechada
     }
 }

@@ -24,6 +24,8 @@ public static class Politicas
     public const string PodeRegistrarAtividades = EquipeNap;
     /// <summary>Consultar atividades: Equipe NAP e CoordenadorCurso (só o próprio curso; o recorte fica nos handlers).</summary>
     public const string PodeConsultarAtividades = PodeConsultarAlunos;
+    /// <summary>Anexar documento ao aluno: Equipe NAP e CoordenadorCurso (só aluno do próprio curso; o recorte fica no handler).</summary>
+    public const string PodeAnexarDocumentos = PodeConsultarAlunos;
     /// <summary>Consultar a produção: Equipe NAP, Gestão e CoordenadorCurso (recorte por perfil nos handlers).</summary>
     public const string PodeConsultarProducao = nameof(PodeConsultarProducao);
     /// <summary>Reabrir semanas e lançar ajustes de produção: Administrador e CoordenadorNap.</summary>

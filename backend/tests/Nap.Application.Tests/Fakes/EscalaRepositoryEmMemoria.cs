@@ -29,6 +29,9 @@ public sealed class EscalaRepositoryEmMemoria : IEscalaRepository
     public Task<AutorizacaoForaEscala?> ObterAutorizacaoAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(Autorizacoes.FirstOrDefault(a => a.Id == id));
 
+    public Task<Guid?> ProfissionalDaAutorizacaoAsync(Guid id, CancellationToken ct) =>
+        Task.FromResult(Autorizacoes.FirstOrDefault(a => a.Id == id)?.ProfissionalId);
+
     public Task<bool> ExisteAutorizacaoAtivaAsync(Guid profissionalId, DateTimeOffset inicio, CancellationToken ct) =>
         Task.FromResult(Autorizacoes.Any(a => a.ProfissionalId == profissionalId && a.RevogadaEm == null
             && a.Intervalo.Inicio <= inicio && inicio < a.Intervalo.Fim));

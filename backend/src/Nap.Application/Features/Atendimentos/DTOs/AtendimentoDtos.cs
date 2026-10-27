@@ -13,7 +13,7 @@ public record CorrecaoAtendimentoDto(string Autor, DateTimeOffset Em, string? Ju
     EstadoAtendimento EstadoAnterior, EstadoAtendimento EstadoNovo, TipoAtendimento TipoAnterior,
     DateTimeOffset InicioAnterior, DateTimeOffset FimAnterior);
 
-public record AtendimentoDetalheDto(Guid Id, Guid? CompromissoId, DateTimeOffset Inicio, DateTimeOffset Fim,
+public record AtendimentoDetalheDto(Guid Id, Guid? CompromissoId, DateTimeOffset Inicio, DateTimeOffset Fim, int DuracaoMinutos,
     Guid AlunoId, string Aluno, Guid ProfissionalId, string Profissional, TipoAtendimento Tipo, EstadoAtendimento Estado,
     bool Avulso, string? JustificativaAvulso, DadosClinicosDto? DadosClinicos, IReadOnlyList<CorrecaoAtendimentoDto> Correcoes,
     string Versao);

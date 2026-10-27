@@ -35,14 +35,14 @@ public class ProcessadorOutboxTests(SqlServerFixture fx)
     }
 
     /// <summary>Todo SIP "ativo" é um id sem usuário: inserir a notificação viola a FK no meio do consumidor.</summary>
-    private sealed class UsuarioQueriesComSipInexistente : IUsuarioQueries
+    private class UsuarioQueriesComSipInexistente : IUsuarioQueries
     {
         public Task<bool> EhProfissionalAtivoAsync(Guid id, CancellationToken ct) => Task.FromResult(true);
         public Task<IReadOnlyList<ProfissionalDto>> ListarProfissionaisAsync(bool incluirInativos, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<ProfissionalDto>>([]);
         public Task<IReadOnlyList<ProfissionalProducaoDto>> ListarProfissionaisDaProducaoAsync(DateOnly inicio, DateOnly fim, TimeZoneInfo fuso,
             Guid? profissionalId, CancellationToken ct) => Task.FromResult<IReadOnlyList<ProfissionalProducaoDto>>([]);
-        public Task<IReadOnlyList<Guid>> ListarAtivosPorPerfilAsync(string perfil, Guid? cursoId, CancellationToken ct) =>
+        public virtual Task<IReadOnlyList<Guid>> ListarAtivosPorPerfilAsync(string perfil, Guid? cursoId, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<Guid>>([Guid.NewGuid()]);
         public Task<bool> EstaAtivoAsync(Guid id, CancellationToken ct) => Task.FromResult(true);
         public Task<UsuarioResumoDto?> ObterResumoAsync(Guid id, CancellationToken ct) => Task.FromResult<UsuarioResumoDto?>(null);
@@ -107,11 +107,28 @@ public class ProcessadorOutboxTests(SqlServerFixture fx)
 
         var mensagem = await MensagemAsync(evento.EventoId);
         Assert.Equal(_relogio.Agora, mensagem.ProcessadoEm);
-        Assert.Equal(0, mensagem.Tentativas);
+        Assert.Equal(1, mensagem.Tentativas); // a tentativa é contada na reserva, com ou sem sucesso
         await using var db = fx.CriarContexto();
         var n = await db.Notificacoes.SingleAsync(n => n.EventoId == evento.EventoId && n.DestinatarioId == sip, ct);
         Assert.Equal("Novo encaminhamento: Joana Prado", n.Titulo);
         Assert.Equal(EstadoEmail.Enviado, n.EstadoEmail);
+    }
+
+    [Fact]
+    public async Task Duas_instancias_ao_mesmo_tempo_processam_a_mensagem_uma_vez_sem_falha()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (evento, sip) = await EventoCriadoAsync();
+        await using var sp1 = Servicos();
+        await using var sp2 = Servicos();
+
+        await Task.WhenAll(Processador(sp1).ProcessarPendentesAsync(ct), Processador(sp2).ProcessarPendentesAsync(ct));
+
+        var mensagem = await MensagemAsync(evento.EventoId);
+        // Uma só tentativa (a da reserva) e sem falha registrada: a segunda instância não tentou de novo (antes, batia no índice único).
+        Assert.Equal((_relogio.Agora, 1, (string?)null), (mensagem.ProcessadoEm, mensagem.Tentativas, mensagem.UltimoErro));
+        await using var db = fx.CriarContexto();
+        Assert.Equal(1, await db.Notificacoes.CountAsync(n => n.EventoId == evento.EventoId && n.DestinatarioId == sip, ct));
     }
 
     [Fact]
@@ -134,6 +151,36 @@ public class ProcessadorOutboxTests(SqlServerFixture fx)
         _relogio.Agora = _relogio.Agora.AddSeconds(29);
         await Processador(sp).ProcessarPendentesAsync(ct);
         Assert.Equal(1, (await MensagemAsync(evento.EventoId)).Tentativas);
+    }
+
+    /// <summary>Lê a tentativa gravada na linha da outbox no meio do consumidor e então falha, como um processo que cai ali.</summary>
+    private sealed class UsuarioQueriesQueLeATentativa(SqlServerFixture fx, Guid mensagemId) : UsuarioQueriesComSipInexistente
+    {
+        public int? TentativasDuranteOConsumo { get; private set; }
+
+        public override async Task<IReadOnlyList<Guid>> ListarAtivosPorPerfilAsync(string perfil, Guid? cursoId, CancellationToken ct)
+        {
+            await using var db = fx.CriarContexto();
+            TentativasDuranteOConsumo = await db.Outbox.Where(m => m.Id == mensagemId).Select(m => m.Tentativas).SingleAsync(ct);
+            throw new InvalidOperationException("Consumidor caiu");
+        }
+    }
+
+    [Fact]
+    public async Task Tentativa_e_contada_na_reserva_antes_de_o_consumidor_falhar()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (evento, _) = await EventoCriadoAsync();
+        var usuarios = new UsuarioQueriesQueLeATentativa(fx, evento.EventoId);
+        await using var sp = Servicos(usuarios);
+
+        await Processador(sp).ProcessarPendentesAsync(ct);
+
+        // Já valia 1 quando o consumidor rodou: se o processo morresse ali, a tentativa não se perderia. O catch não soma outra.
+        Assert.Equal(1, usuarios.TentativasDuranteOConsumo);
+        var mensagem = await MensagemAsync(evento.EventoId);
+        Assert.Equal((1, _relogio.Agora.AddSeconds(30)), (mensagem.Tentativas, mensagem.ProximaTentativaEm));
+        Assert.Contains("Consumidor caiu", mensagem.UltimoErro);
     }
 
     [Fact]
@@ -198,7 +245,7 @@ public class ProcessadorOutboxTests(SqlServerFixture fx)
     }
 
     [Fact]
-    public async Task Purga_tokens_expirados_ha_mais_de_sete_dias_e_chaves_com_mais_de_um_dia()
+    public async Task Purga_tokens_expirados_ha_mais_de_sete_dias_chaves_com_mais_de_um_dia_e_outbox_entregue_ha_mais_de_trinta()
     {
         var ct = TestContext.Current.CancellationToken;
         var usuario = await fx.CriarProfissionalAsync();
@@ -214,15 +261,24 @@ public class ProcessadorOutboxTests(SqlServerFixture fx)
             await new ChavesIdempotencia(db, new RelogioTeste(agora.AddDays(-2))).ReservarAsync(usuario, "velha", "POST /x", ct);
             await new ChavesIdempotencia(db, _relogio).ReservarAsync(usuario, "nova", "POST /x", ct);
         }
+        var (entregueHaMuito, _) = await EventoCriadoAsync();
+        var (entregueRecente, _) = await EventoCriadoAsync();
+        await using (var db = fx.CriarContexto())
+        {
+            await db.Outbox.Where(m => m.Id == entregueHaMuito.EventoId).ExecuteUpdateAsync(x => x.SetProperty(m => m.ProcessadoEm, agora.AddDays(-31)), ct);
+            await db.Outbox.Where(m => m.Id == entregueRecente.EventoId).ExecuteUpdateAsync(x => x.SetProperty(m => m.ProcessadoEm, agora.AddDays(-1)), ct);
+        }
         await using var sp = Servicos();
 
-        // Banco compartilhado entre os testes: outras linhas antigas também podem cair, por isso >= 2.
-        Assert.True(await Processador(sp).PurgarAsync(ct) >= 2);
+        // Banco compartilhado entre os testes: outras linhas antigas também podem cair, por isso >= 3.
+        Assert.True(await Processador(sp).PurgarAsync(ct) >= 3);
 
         await using var leitura = fx.CriarContexto();
         var tokens = await leitura.TokensRefresh.Where(t => t.UsuarioId == usuario).Select(t => t.Id).ToListAsync(ct);
         Assert.Equal(new[] { recente.Id }, tokens);
         var chaves = await leitura.ChavesIdempotencia.Where(c => c.UsuarioId == usuario).Select(c => c.Chave).ToListAsync(ct);
         Assert.Equal(new[] { "nova" }, chaves);
+        Assert.False(await leitura.Outbox.AnyAsync(m => m.Id == entregueHaMuito.EventoId, ct));
+        Assert.True(await leitura.Outbox.AnyAsync(m => m.Id == entregueRecente.EventoId, ct));
     }
 }

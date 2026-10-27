@@ -60,7 +60,8 @@ describe("DocumentosDoAluno", () => {
     montar("CoordenadorCurso");
     expect(await screen.findByText(/laudo\.pdf · 1,2 MB/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Baixar/ })).toBeInTheDocument();
-    for (const nome of [/Anexar/, /Alterar categoria/, /Compartilhar/, /Arquivar/]) expect(screen.queryByRole("button", { name: nome })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Anexar documento" })).toBeInTheDocument();
+    for (const nome of [/Alterar categoria/, /Compartilhar/, /Arquivar/]) expect(screen.queryByRole("button", { name: nome })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Mostrar arquivados")).not.toBeInTheDocument();
   });
 

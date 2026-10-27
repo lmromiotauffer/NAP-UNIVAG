@@ -1,7 +1,7 @@
 import type { VarianteSemantica } from "../../components/ui/variantes";
 import type { components } from "../../lib/api-schema";
 
-export type EstadoVersaoPei = components["schemas"]["EstadoVersaoPei"];
+type EstadoVersaoPei = components["schemas"]["EstadoVersaoPei"];
 
 export const ROTULO_ESTADO: Record<EstadoVersaoPei, string> = {
   Rascunho: "Rascunho",

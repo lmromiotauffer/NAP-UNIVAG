@@ -5,7 +5,7 @@ export type VersaoParaAssinatura = components["schemas"]["VersaoParaAssinaturaDt
 
 // Instância própria, sem os interceptadores de sessão nem cookies: o fluxo do aluno é anônimo e nunca pode levar o
 // Authorization da equipe logada no mesmo navegador (a auditoria registraria o usuário da equipe).
-export const apiAssinatura = axios.create({ baseURL: "/api" });
+export const apiAssinatura = axios.create({ baseURL: "/api", timeout: 30_000 });
 
 export const assinaturaService = {
   abrir: (token: string, codigo: string) => apiAssinatura.post<VersaoParaAssinatura>("/assinar/abrir", { token, codigo }).then((r) => r.data),

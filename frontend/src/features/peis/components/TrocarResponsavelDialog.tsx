@@ -45,11 +45,11 @@ export function TrocarResponsavelDialog({ versao, aoFechar, aoConcluir }: { vers
   return (
     <Modal aberto aoFechar={aoFechar} titulo="Trocar responsável">
       <form noValidate onSubmit={handleSubmit(enviar)} className="flex flex-col gap-4">
+        {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
+        {profissionais.isError && <Alert variante="urgente" className="animate-surgir">Não foi possível carregar os profissionais. Feche e tente novamente.</Alert>}
         <p className="m-0 text-sm text-suave">
           Responsável atual: {versao.responsavel}. As assinaturas já feitas permanecem; a assinatura profissional pendente passa ao novo responsável.
         </p>
-        {erroGeral && <Alert variante="urgente" className="animate-surgir">{erroGeral}</Alert>}
-        {profissionais.isError && <Alert variante="urgente" className="animate-surgir">Não foi possível carregar os profissionais. Feche e tente novamente.</Alert>}
         <Field rotulo="Novo responsável" erro={errors.novoResponsavelId?.message} obrigatorio>
           <Select {...register("novoResponsavelId")}>
             <option value="">{profissionais.isPending ? "Carregando…" : "Selecione"}</option>

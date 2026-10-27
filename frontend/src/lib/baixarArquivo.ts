@@ -28,7 +28,8 @@ async function lerErroDoBlob(e: unknown): Promise<never> {
 
 /** Baixa um arquivo autenticado (o token vai no cabeçalho, então não serve um link direto). */
 export async function baixarArquivo(url: string): Promise<void> {
-  const resposta = await api.get<Blob>(url, { responseType: "blob" }).catch(lerErroDoBlob);
+  // Sem timeout: arquivos e exportações grandes passam dos 30 s numa conexão lenta.
+  const resposta = await api.get<Blob>(url, { responseType: "blob", timeout: 0 }).catch(lerErroDoBlob);
   const endereco = URL.createObjectURL(resposta.data);
   try {
     const a = document.createElement("a");

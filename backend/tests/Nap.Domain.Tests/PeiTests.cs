@@ -24,7 +24,7 @@ public class PeiTests
     {
         var v = pei.Versoes.Single(x => x.Estado == EstadoVersaoPei.Rascunho);
         v.EnviarParaRevisao(Agora);
-        v.AprovarRevisao(Aprovador, CalculadoraHashPei.Calcular(v.Conteudo), Agora);
+        v.AprovarRevisao(Aprovador, Agora);
         return v;
     }
 
@@ -117,19 +117,30 @@ public class PeiTests
     }
 
     [Fact]
-    public void Devolver_aguardando_assinaturas_descarta_hash_e_assinaturas()
+    public void Devolver_aguardando_assinaturas_descarta_hash_e_invalida_assinaturas()
     {
         var pei = Novo();
         var v = AguardandoAssinaturas(pei);
         v.RegistrarAssinatura(PapelAssinatura.Profissional, Responsavel, "Profissional", v.HashConteudo!, "ev", Agora);
+        var hashAssinado = v.HashConteudo;
 
-        v.Devolver("Rever vigência", Agora);
+        v.Devolver("Rever vigência", Agora.AddHours(1));
 
         Assert.Equal(EstadoVersaoPei.Rascunho, v.Estado);
         Assert.Null(v.HashConteudo);
         Assert.Null(v.AprovadaEm);
         Assert.Null(v.AprovadaPorId);
-        Assert.Empty(v.Assinaturas);
+        // A assinatura fica como prova do que foi assinado, mas não vale mais.
+        var invalidada = Assert.Single(v.Assinaturas);
+        Assert.Equal((hashAssinado, Agora.AddHours(1)), (invalidada.HashConteudo, invalidada.InvalidadaEm));
+        Assert.Null(v.AssinaturaValida(PapelAssinatura.Profissional));
+
+        // Reaprovada, o mesmo papel assina de novo.
+        v.EnviarParaRevisao(Agora.AddHours(2));
+        v.AprovarRevisao(Guid.CreateVersion7(), Agora.AddHours(2));
+        v.RegistrarAssinatura(PapelAssinatura.Profissional, Responsavel, "Profissional", v.HashConteudo!, "ev2", Agora.AddHours(3));
+        Assert.Equal(2, v.Assinaturas.Count);
+        Assert.Equal("ev2", v.AssinaturaValida(PapelAssinatura.Profissional)!.Evidencia);
     }
 
     [Fact]
@@ -137,11 +148,10 @@ public class PeiTests
     {
         var v = Novo().Versoes.Single();
         var hash = CalculadoraHashPei.Calcular(v.Conteudo);
-        Assert.Throws<DomainException>(() => v.AprovarRevisao(Aprovador, hash, Agora)); // rascunho
+        Assert.Throws<DomainException>(() => v.AprovarRevisao(Aprovador, Agora)); // rascunho
         v.EnviarParaRevisao(Agora);
-        Assert.Throws<DomainException>(() => v.AprovarRevisao(Aprovador, new string('0', 64), Agora));
 
-        v.AprovarRevisao(Aprovador, hash, Agora);
+        v.AprovarRevisao(Aprovador, Agora);
 
         Assert.Equal(EstadoVersaoPei.AguardandoAssinaturas, v.Estado);
         Assert.Equal(hash, v.HashConteudo);
@@ -247,13 +257,8 @@ public class PeiTests
         v2.AtualizarConteudo(Conteudo("Revisadas"), Agora);
         var v2Assinada = Assinada(pei);
         Assert.Same(v2, v2Assinada);
-        var v3 = pei.NovaVersao(Autor, Agora);
-
-        Assert.Throws<DomainException>(() => pei.Publicar(v2, Aprovador, Curso, Agora));
-        Assert.Equal(EstadoVersaoPei.Assinada, v2.Estado);
         Assert.Same(v1, pei.VersaoPublicada);
 
-        pei.DescartarVersao(v3);
         pei.Publicar(v2, Aprovador, Curso, Agora);
 
         Assert.Same(v2, pei.VersaoPublicada);
@@ -262,15 +267,17 @@ public class PeiTests
     }
 
     [Fact]
-    public void Versao_assinada_antiga_nao_e_publicada_depois_de_nova_versao()
+    public void Versao_assinada_impede_nova_versao_ate_ser_publicada()
     {
+        // Sem a trava, a nova versão deixaria a assinada presa: só a mais recente publica.
         var pei = Novo();
         var v1 = Assinada(pei);
-        pei.NovaVersao(Autor, Agora);
 
-        Assert.Throws<DomainException>(() => pei.Publicar(v1, Aprovador, Curso, Agora));
-        Assert.Equal(EstadoVersaoPei.Assinada, v1.Estado);
-        Assert.Null(pei.VersaoPublicada);
+        Assert.Throws<DomainException>(() => pei.NovaVersao(Autor, Agora));
+        Assert.Single(pei.Versoes);
+
+        pei.Publicar(v1, Aprovador, Curso, Agora);
+        Assert.Equal(2, pei.NovaVersao(Autor, Agora).Numero);
     }
 
     [Fact]
@@ -301,7 +308,7 @@ public class PeiTests
         {
             Assert.Throws<DomainException>(() => v.AtualizarConteudo(Conteudo("Mudou"), Agora));
             Assert.Throws<DomainException>(() => v.EnviarParaRevisao(Agora));
-            Assert.Throws<DomainException>(() => v.AprovarRevisao(Aprovador, hash, Agora));
+            Assert.Throws<DomainException>(() => v.AprovarRevisao(Aprovador, Agora));
             Assert.Throws<DomainException>(() => v.Devolver("Ajustar", Agora));
             Assert.Throws<DomainException>(() =>
                 v.RegistrarAssinatura(PapelAssinatura.Aluno, null, "Aluno", hash, "ev", Agora));

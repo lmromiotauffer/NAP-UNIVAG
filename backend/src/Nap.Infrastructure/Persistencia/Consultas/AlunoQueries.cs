@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Nap.Application.Comum;
 using Nap.Application.Features.Alunos;
@@ -14,14 +15,16 @@ public sealed class AlunoQueries(NapDbContext db) : IAlunoQueries
     public async Task<PagedResult<AlunoListaDto>> ListarAsync(FiltroAlunos f, EscopoAlunos e, CancellationToken ct)
     {
         var q = NoEscopo(e);
+        // Ex-coordenador (aluno transferido): o estado atual não é dele, nem para filtrar; só casa quem ainda está no curso dele.
+        var somente = e.SomenteCursoId;
         if (!string.IsNullOrWhiteSpace(f.Busca))
         {
             var busca = f.Busca.Trim();
             q = q.Where(a => a.NomeCompleto.Contains(busca) || a.Matricula.Valor.Contains(busca));
         }
-        if (f.CursoId is { } curso) q = q.Where(a => a.CursoAtualId == curso);
-        if (f.ProfissionalId is { } prof) q = q.Where(a => a.ProfissionalResponsavelId == prof);
-        if (f.Situacao is { } situacao) q = q.Where(a => a.Situacao == situacao);
+        if (f.CursoId is { } curso) q = q.Where(a => (somente == null || a.CursoAtualId == somente) && a.CursoAtualId == curso);
+        if (f.ProfissionalId is { } prof) q = q.Where(a => (somente == null || a.CursoAtualId == somente) && a.ProfissionalResponsavelId == prof);
+        if (f.Situacao is { } situacao) q = q.Where(a => (somente == null || a.CursoAtualId == somente) && a.Situacao == situacao);
         if (f.InicioDe is { } de) q = q.Where(a => a.InicioAcompanhamento >= de);
         if (f.InicioAte is { } ate) q = q.Where(a => a.InicioAcompanhamento <= ate);
 
@@ -41,11 +44,16 @@ public sealed class AlunoQueries(NapDbContext db) : IAlunoQueries
         var itens = await q
             .OrderBy(a => a.NomeCompleto).ThenBy(a => a.Id)
             .Skip((f.Pagina - 1) * f.Tamanho).Take(f.Tamanho)
-            .Select(a => new AlunoListaDto(a.Id, a.NomeCompleto, a.Matricula.Valor, a.CursoAtualId,
-                db.Cursos.Where(c => c.Id == a.CursoAtualId).Select(c => c.Nome).FirstOrDefault() ?? "",
-                a.Semestre, a.ProfissionalResponsavelId,
-                db.Users.Where(u => u.Id == a.ProfissionalResponsavelId).Select(u => u.NomeCompleto).FirstOrDefault() ?? "",
-                a.Situacao,
+            .Select(a => new AlunoListaDto(a.Id, a.NomeCompleto, a.Matricula.Valor,
+                somente == null || a.CursoAtualId == somente ? a.MatriculaAtiva : null,
+                somente == null || a.CursoAtualId == somente ? a.CursoAtualId : null,
+                somente == null || a.CursoAtualId == somente
+                    ? db.Cursos.Where(c => c.Id == a.CursoAtualId).Select(c => c.Nome).FirstOrDefault() ?? "" : "",
+                somente == null || a.CursoAtualId == somente ? a.Semestre : null,
+                somente == null || a.CursoAtualId == somente ? a.ProfissionalResponsavelId : null,
+                somente == null || a.CursoAtualId == somente
+                    ? db.Users.Where(u => u.Id == a.ProfissionalResponsavelId).Select(u => u.NomeCompleto).FirstOrDefault() ?? "" : "",
+                somente == null || a.CursoAtualId == somente ? a.Situacao : null,
                 clinico ? db.Atendimentos.Count(x => x.AlunoId == a.Id && x.Estado == EstadoAtendimento.Realizado) : null,
                 clinico ? db.Atendimentos.Count(x => x.AlunoId == a.Id && x.Estado == EstadoAtendimento.Ausente && x.Tipo != TipoAtendimento.Reuniao) : null))
             .ToListAsync(ct);
@@ -60,7 +68,7 @@ public sealed class AlunoQueries(NapDbContext db) : IAlunoQueries
             .Where(a => a.Id == id)
             .Select(a => new
             {
-                a.Id, a.NomeCompleto, Matricula = a.Matricula.Valor, a.CursoAtualId,
+                a.Id, a.NomeCompleto, Matricula = a.Matricula.Valor, a.MatriculaAtiva, a.CursoAtualId,
                 Curso = db.Cursos.Where(c => c.Id == a.CursoAtualId).Select(c => c.Nome).FirstOrDefault(),
                 a.Semestre, a.ProfissionalResponsavelId,
                 Profissional = db.Users.Where(u => u.Id == a.ProfissionalResponsavelId).Select(u => u.NomeCompleto).FirstOrDefault(),
@@ -75,7 +83,12 @@ public sealed class AlunoQueries(NapDbContext db) : IAlunoQueries
             .SingleOrDefaultAsync(ct);
         if (linha is null) return null;
 
-        return new AlunoFichaDto(linha.Id, linha.NomeCompleto, linha.Matricula, linha.CursoAtualId, linha.Curso ?? "", linha.Semestre,
+        // Ex-coordenador (aluno já em outro curso): nada do estado atual, que foi definido depois do vínculo dele.
+        if (e.SomenteCursoId is { } somente && linha.CursoAtualId != somente)
+            return new AlunoFichaDto(linha.Id, linha.NomeCompleto, linha.Matricula, null, null, "", null,
+                null, "", null, linha.InicioAcompanhamento, null, null, null, Convert.ToBase64String(linha.Versao));
+
+        return new AlunoFichaDto(linha.Id, linha.NomeCompleto, linha.Matricula, linha.MatriculaAtiva, linha.CursoAtualId, linha.Curso ?? "", linha.Semestre,
             linha.ProfissionalResponsavelId, linha.Profissional ?? "", linha.Situacao, linha.InicioAcompanhamento,
             linha.NecessidadesEducacionais, linha.ObservacoesAcademicas,
             clinico ? new ResumoAcompanhamentoDto(linha.Realizados, linha.Faltas, linha.Ultimo) : null,
@@ -115,8 +128,10 @@ public sealed class AlunoQueries(NapDbContext db) : IAlunoQueries
             cursos = cursos.Where(v => v.RegistradoEm >= corte && (fimJanela == null || v.RegistradoEm < fimJanela));
             // Só encaminhamentos gravados com o curso dele (o curso da criação, não o atual do aluno).
             encaminhamentos = encaminhamentos.Where(x => x.CursoId == e.SomenteCursoId);
-            evolucoes = encaminhamentos.SelectMany(x => x.Evolucoes, (x, v) => new { x.Destino, Evolucao = v }).Where(p => p.Evolucao.Em >= corte);
-            encaminhamentos = encaminhamentos.Where(x => x.CriadoEm >= corte);
+            // Mesma janela das situações: retorno registrado depois da transferência é período de outro coordenador.
+            evolucoes = encaminhamentos.SelectMany(x => x.Evolucoes, (x, v) => new { x.Destino, Evolucao = v })
+                .Where(p => p.Evolucao.Em >= corte && (fimJanela == null || p.Evolucao.Em < fimJanela));
+            encaminhamentos = encaminhamentos.Where(x => x.CriadoEm >= corte && (fimJanela == null || x.CriadoEm < fimJanela));
         }
         var totalSituacoes = await situacoes.CountAsync(ct);
         var eventos = (await situacoes
@@ -210,7 +225,15 @@ public sealed class AlunoQueries(NapDbContext db) : IAlunoQueries
     {
         var q = db.Alunos.AsNoTracking();
         // Curso da época, como encaminhamentos, documentos e PEI: quem coordenou o aluno antes da transferência segue
-        // chegando à ficha (e aos registros gravados com o curso dele). A linha do tempo recorta à janela desse vínculo.
-        return e.SomenteCursoId is { } curso ? q.Where(a => a.HistoricoCursos.Any(v => v.CursoId == curso)) : q;
+        // chegando à ficha (e aos registros gravados com o curso dele). A linha do tempo recorta à janela desse vínculo;
+        // ficha e lista omitem o estado atual.
+        return e.SomenteCursoId is { } curso ? q.Where(PassouPeloCurso(curso)) : q;
     }
+
+    /// <summary>
+    /// O aluno teve vínculo com o curso: recorte do coordenador na ficha, nos documentos e nos PEIs. Vínculo de duração zero
+    /// (correção de curso no mesmo dia) não conta, como no painel.
+    /// </summary>
+    internal static Expression<Func<Aluno, bool>> PassouPeloCurso(Guid curso) =>
+        a => a.HistoricoCursos.Any(v => v.CursoId == curso && (v.Ate == null || v.Ate != v.Desde));
 }

@@ -35,7 +35,7 @@ As permissões estão nas políticas de `backend/src/Nap.Api/Infra/Politicas.cs`
 | Administrador | Tudo, inclusive documentos arquivados e a auditoria | Administração completa (inclusive de administradores); correções justificadas; aprova, publica e arquiva PEI; reabre semana e lança ajustes de produção |
 | Coordenador NAP | Igual ao Administrador | Igual ao Administrador, mas não cria nem gerencia administradores |
 | Profissional NAP | Todos os alunos e a agenda da equipe; só a própria produção | Grava a própria agenda; registra e corrige os próprios atendimentos e atividades; cria encaminhamentos e PEIs; fecha a própria semana |
-| Coordenador de curso | Resumo pedagógico, PEIs publicados, documentos compartilhados, atividades e produção do próprio curso, sem dados clínicos. Após uma transferência, mantém acesso ao aluno e à linha do tempo do período em que o coordenava | Registra ciência do PEI e retorno de encaminhamento; usa comunicações |
+| Coordenador de curso | Resumo pedagógico, PEIs publicados, documentos compartilhados, atividades e produção do próprio curso, sem dados clínicos. Anexa documentos a alunos do próprio curso, que já nascem compartilhados. Após uma transferência, mantém acesso ao aluno e à linha do tempo do período em que o coordenava | Registra ciência do PEI e retorno de encaminhamento; usa comunicações |
 | SIP (Clínica Escola) | Só os encaminhamentos destinados ao SIP/Clínica Escola e o painel desses encaminhamentos | Registra retorno; usa comunicações |
 | Gestão | Painel e produção agregados e por profissional, sem alunos | Só leitura |
 
@@ -58,7 +58,7 @@ Neste documento, "Equipe NAP" inclui Administrador, Coordenador NAP e Profission
 | Produção | `/producao` | Produção por período, fechamento semanal, ajustes, recortes por perfil e exportação em PDF e Excel com o mesmo recorte da tela |
 | Administração | `/administracao` | Usuários (senha temporária e troca obrigatória), cursos, escalas com vigência, autorizações fora da escala, feriados, limites de alerta e auditoria |
 
-Documentos do aluno: PDF, PNG, JPG, DOCX, XLSX, TXT e CSV de até 5 MiB, com checagem da assinatura do arquivo. O acesso inicial é restrito. O compartilhamento com a coordenação exige justificativa; revogações, arquivamentos e downloads são auditados.
+Documentos do aluno: PDF, PNG, JPG, DOCX, XLSX, TXT e CSV de até 5 MiB, com checagem da assinatura do arquivo. O acesso inicial é restrito (exceto o que a coordenação de curso anexa, que já nasce compartilhado). O compartilhamento com a coordenação exige justificativa; revogações, arquivamentos e downloads são auditados.
 
 ---
 
@@ -222,7 +222,7 @@ Gere a `Jwt:Chave` com `openssl rand -base64 64` (mínimo de 32 bytes; a API nã
 dotnet run --project backend/src/Nap.Api --launch-profile Nap.Api -- --migrar --semear   # https://localhost:7180
 ```
 
-- `--migrar` aplica as migrações. Sem essa flag, a inicialização não toca o banco nem o Redis.
+- `--migrar` aplica as migrações. Sem essa flag, a inicialização não toca o banco; no Redis, só invalida o cache do painel (tolera o Redis fora do ar).
 
 - `--semear` só funciona em `Development` e é idempotente (não faz nada se `admin@nap.demo` já existe).
 
@@ -271,7 +271,7 @@ Hierarquia: `appsettings.json` (só valores não sensíveis, versionado) → use
 | `Jwt:Emissor` / `Jwt:Audiencia` | appsettings | Emissão do token |
 | `Seed:SenhaPadrao` | secret | Senha dos usuários de demonstração (`--semear`) |
 | `Nap:Arquivos:Diretorio` | appsettings / env | Pasta dos documentos (padrão relativo ao content root; em produção, caminho absoluto) |
-| `Nap:Arquivos:LimiteBytes` | appsettings | Tamanho máximo do upload (padrão 5242880) |
+| `Nap:Arquivos:LimiteBytes` | appsettings | Tamanho máximo do upload (padrão 5242880; no máximo 5 MiB, teto do corpo da API) |
 | `Nap:Outbox:IntervaloSegundos` | appsettings | Ciclo do processador da outbox (padrão 5) |
 
 No front-end, `frontend/.env` (opcional) define o alvo do proxy do Vite; veja `frontend/.env.example`.
@@ -306,7 +306,7 @@ dotnet ef database update --project backend/src/Nap.Infrastructure --startup-pro
 dotnet ef migrations script --idempotent --project backend/src/Nap.Infrastructure --startup-project backend/src/Nap.Api -o migracao.sql
 ```
 
-São 19 migrations, de `Inicial` a `IndiceCompromissosSemDesfecho`.
+São 23 migrations, de `Inicial` a `PeiUnicoPorAlunoEUsuarioReativadoEm`.
 
 ---
 
@@ -324,7 +324,7 @@ Se o Redis falhar, a API registra um aviso e consulta o banco. Se também não c
 
 ## Autenticação e autorização
 
-Autenticação: ASP.NET Core Identity como store + JWT (HS256, 15 min) mantido só em memória no front. O refresh é opaco, de 7 dias e rotativo, no cookie `nap_refresh` (`HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api/auth`); `refresh` e `logout` exigem o cabeçalho `X-Requested-With: nap-spa`. Reapresentar um refresh já usado revoga a família inteira, exceto nos 30 s seguintes ao uso (duas abas renovando com o mesmo cookie).
+Autenticação: ASP.NET Core Identity como store + JWT (HS256, 15 min) mantido só em memória no front. O refresh é opaco, de 7 dias e rotativo, no cookie `nap_refresh` (`HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api/auth`); `refresh` e `logout` exigem o cabeçalho `X-Requested-With: nap-spa`. Reapresentar um refresh já usado revoga a família inteira, exceto nos 5 s seguintes ao uso (duas abas renovando com o mesmo cookie).
 
 Revogação imediata: a cada requisição o carimbo de segurança e a sessão são conferidos. Mudar perfil, curso ou situação do usuário, ou trocar/redefinir a senha, revoga todas as sessões dele.
 
@@ -368,7 +368,7 @@ Erros seguem `ProblemDetails` (RFC 9457), sem *stack trace*:
 | `ConflictException` / `ConflitoAgendaException` | 409 (o segundo com a lista `conflitos`) |
 | `DomainException` | 422 |
 | `If-Match` ausente | 428 |
-| Rate limit do login | 429 + `Retry-After` |
+| Rate limit do login e da assinatura do aluno (`/api/assinar`) | 429 + `Retry-After` |
 | demais | 500 (mensagem genérica, com `traceId`) |
 
 ### Regenerar o OpenAPI
@@ -454,7 +454,7 @@ Auditoria: tabela `EventosAuditoria`, consultável em Administração → Audito
 
 - Uploads com limite de tamanho, lista de tipos e checagem da assinatura do arquivo; gravados em disco com chave opaca, fora da raiz web.
 
-- Rate limit no login e bloqueio de conta.
+- Rate limit por IP no login e nas rotas anônimas de assinatura do PEI; bloqueio de conta.
 
 - Segredos fora do código: user-secrets em desenvolvimento, variáveis de ambiente em produção.
 
@@ -508,7 +508,7 @@ O proxy reverso, se houver, precisa aceitar corpos de pelo menos 6 MiB (uploads 
 | `ConnectionStrings__Nap` | SQL Server da instituição |
 | `ConnectionStrings__Redis` | Redis (obrigatório; a API não inicia sem a string. Se o Redis cair em execução, a API segue, mais lenta, e `/health/ready` fica `Degraded`) |
 | `Jwt__Chave` | segredo aleatório de 32+ bytes (ex.: `openssl rand -base64 48`) |
-| `Nap__Arquivos__Diretorio` | caminho absoluto num volume persistente, fora da pasta publicada; a partida falha se não der para gravar nele |
+| `Nap__Arquivos__Diretorio` | caminho absoluto num volume persistente, fora da pasta publicada e compartilhado entre as instâncias (se houver mais de uma); fora de Development, a partida falha se o caminho for relativo ou se não der para gravar nele |
 | `ASPNETCORE_FORWARDEDHEADERS_ENABLED` | `true` se houver proxy reverso terminando o HTTPS (senão o limite de login por IP vira um contador único para todos) |
 | `Logging__Console__FormatterName` | `json` (opcional), para cruzar o `traceId` dos erros 500 com o log |
 
@@ -544,7 +544,7 @@ O `docker-compose.yml` é só de desenvolvimento: a imagem do SQL Server sem `MS
 | Cache | Só o painel, TTL de 5 min e invalidação por geração; Redis caído degrada para o banco. |
 | Datas e fuso | UTC em `DateTimeOffset`; datas civis em `America/Cuiaba`; escala e feriado validados no servidor (422). |
 | Concorrência | `sp_getapplock` por profissional e aluno; `rowversion` + `If-Match` (428/409); `Idempotency-Key`; sem `EnableRetryOnFailure`. |
-| Eventos | Outbox transacional com backoff (30 s × 2ⁿ, teto de 1 h, desiste após 8 falhas) e notificações idempotentes; instância única. |
+| Eventos | Outbox transacional com backoff (30 s × 2ⁿ, teto de 1 h, desiste após 8 tentativas, contadas ao reservar a mensagem) e notificações idempotentes; instância única. |
 | Encaminhamentos | SIP = Clínica Escola e vê o motivo restrito; coordenação de curso não vê dados clínicos; prazos de 7 e 15 dias. |
 | Documentos | Acesso inicial restrito; compartilhamento com justificativa; arquivos em disco com chave opaca. |
 | PEI | Rascunho → Revisão → Assinaturas → Publicada; assinatura demonstrativa; link do aluno de 72 h com código de 6 dígitos. |

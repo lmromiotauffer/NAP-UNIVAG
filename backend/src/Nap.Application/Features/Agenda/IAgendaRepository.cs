@@ -20,6 +20,11 @@ public interface IAgendaRepository
 
     Task<bool> ExisteConflitoAsync(Guid profissionalId, Guid? alunoId, IntervaloHorario intervalo, Guid? ignorarId, CancellationToken ct);
 
+    /// <summary>A mesma regra de <see cref="ExisteConflitoAsync"/> (sem aluno) para vários profissionais numa consulta por fonte:
+    /// devolve os que têm conflito. <paramref name="ignorarIds"/> são as instâncias sendo remarcadas (cada uma de um só participante).</summary>
+    Task<IReadOnlyList<Guid>> ProfissionaisComConflitoAsync(IReadOnlyCollection<Guid> profissionaisIds, IntervaloHorario intervalo,
+        IReadOnlyCollection<Guid> ignorarIds, CancellationToken ct);
+
     /// <summary>Itens do profissional que ocupam o intervalo, pela mesma regra de <see cref="ExisteConflitoAsync"/>. Dentro de EmTransacaoAsync, após BloquearAgendasAsync.</summary>
     Task<IReadOnlyList<ConflitoAgendaDto>> ListarConflitosAsync(Guid profissionalId, IntervaloHorario intervalo, Guid? ignorarId, CancellationToken ct);
 
@@ -55,15 +60,14 @@ public static class AgendaRepositoryExtensoes
     {
         await agenda.BloquearAgendasAsync([.. participantes.Select(p => p.ProfissionalId)], ct);
         if (!ocupaHorario) return;
+        // Uma checagem para o grupo todo; a lista detalhada só para quem conflita (caso raro).
+        var comConflito = await agenda.ProfissionaisComConflitoAsync([.. participantes.Select(p => p.ProfissionalId)], intervalo,
+            [.. participantes.Where(p => p.IgnorarId is not null).Select(p => p.IgnorarId!.Value)], ct);
+        if (comConflito.Count == 0) return;
         var conflitos = new List<ConflitoAgendaDto>();
-        var houveConflito = false;
-        foreach (var (profissionalId, ignorarId) in participantes)
-        {
-            if (!await agenda.ExisteConflitoAsync(profissionalId, null, intervalo, ignorarId, ct)) continue;
-            houveConflito = true;
+        foreach (var (profissionalId, ignorarId) in participantes.Where(p => comConflito.Contains(p.ProfissionalId)))
             conflitos.AddRange(await agenda.ListarConflitosAsync(profissionalId, intervalo, ignorarId, ct));
-        }
         if (conflitos.Count > 0) throw new ConflitoAgendaException(conflitos);
-        if (houveConflito) throw new ConflictException(ConflitoAgendaException.MensagemPadrao);
+        throw new ConflictException(ConflitoAgendaException.MensagemPadrao);
     }
 }

@@ -29,7 +29,7 @@ public class DocumentoTests
         Assert.Equal(CategoriaDocumento.Relatorio, d.Categoria);
         Assert.Equal(VisibilidadeDocumento.RestritoNap, d.Visibilidade);
 
-        d.Compartilhar("Necessário ao curso", Autor, Agora);
+        d.Compartilhar("Necessário ao curso", Autor, d.CursoId, Agora);
         d.AlterarCategoria(CategoriaDocumento.Laudo);
         Assert.Equal(VisibilidadeDocumento.CompartilhadoCoordenacao, d.Visibilidade);
     }
@@ -38,16 +38,16 @@ public class DocumentoTests
     public void Compartilhar_exige_justificativa_e_registra_autor()
     {
         var d = Novo();
-        Assert.Throws<DomainException>(() => d.Compartilhar("  ", Autor, Agora));
+        Assert.Throws<DomainException>(() => d.Compartilhar("  ", Autor, d.CursoId, Agora));
         Assert.Equal(VisibilidadeDocumento.RestritoNap, d.Visibilidade);
 
-        d.Compartilhar(" Necessário ao curso ", Autor, Agora);
+        d.Compartilhar(" Necessário ao curso ", Autor, d.CursoId, Agora);
 
         Assert.Equal(VisibilidadeDocumento.CompartilhadoCoordenacao, d.Visibilidade);
         Assert.Equal(Autor, d.CompartilhadoPorId);
         Assert.Equal(Agora, d.CompartilhadoEm);
         Assert.Equal("Necessário ao curso", d.CompartilhadoJustificativa);
-        Assert.Throws<DomainException>(() => d.Compartilhar("Outra vez", Autor, Agora));
+        Assert.Throws<DomainException>(() => d.Compartilhar("Outra vez", Autor, d.CursoId, Agora));
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public class DocumentoTests
     {
         var d = Novo();
         Assert.Throws<DomainException>(() => d.RevogarCompartilhamento("Motivo", Autor, Agora));
-        d.Compartilhar("Necessário ao curso", Autor, Agora);
+        d.Compartilhar("Necessário ao curso", Autor, d.CursoId, Agora);
 
         d.RevogarCompartilhamento("Não é mais necessário", Autor, Agora.AddDays(1));
 
@@ -76,7 +76,7 @@ public class DocumentoTests
         Assert.Equal("Enviado por engano", d.ArquivadoMotivo);
         Assert.Equal(Autor, d.ArquivadoPorId);
         Assert.Throws<DomainException>(() => d.AlterarCategoria(CategoriaDocumento.Termo));
-        Assert.Throws<DomainException>(() => d.Compartilhar("Justificativa", Autor, Agora));
+        Assert.Throws<DomainException>(() => d.Compartilhar("Justificativa", Autor, d.CursoId, Agora));
         Assert.Throws<DomainException>(() => d.RevogarCompartilhamento("Justificativa", Autor, Agora));
         Assert.Throws<DomainException>(() => d.Arquivar("Motivo", Autor, Agora));
     }

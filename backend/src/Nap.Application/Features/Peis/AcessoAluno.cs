@@ -28,7 +28,7 @@ public static class AcessoAluno
         var versao = pei.Versoes.Single(v => v.Id == acesso.VersaoId);
         if (versao.Estado != EstadoVersaoPei.AguardandoAssinaturas
             || !string.Equals(versao.HashConteudo, acesso.HashConteudo, StringComparison.Ordinal)
-            || versao.Assinaturas.Any(a => a.Papel == PapelAssinatura.Aluno))
+            || versao.AssinaturaValida(PapelAssinatura.Aluno) is not null)
             throw LinkInvalido();
 
         for (var regravacoes = 0; ; regravacoes++)

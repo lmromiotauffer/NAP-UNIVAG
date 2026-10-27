@@ -24,7 +24,7 @@ public class DocumentoQueriesTests(SqlServerFixture fx)
     {
         var d = Documento.Criar(c.Aluno, c.Curso, CategoriaDocumento.Laudo, "Laudo neurológico", "laudo.pdf", "application/pdf",
             10, new string('a', 64), Guid.NewGuid().ToString("N"), c.Prof, Agora.AddMinutes(minutos));
-        if (compartilhar) d.Compartilhar("Necessário para adaptação", c.Prof, Agora.AddMinutes(minutos));
+        if (compartilhar) d.Compartilhar("Necessário para adaptação", c.Prof, d.CursoId, Agora.AddMinutes(minutos));
         if (arquivar) d.Arquivar("Documento substituído", c.Prof, Agora.AddMinutes(minutos));
         await using var db = fx.CriarContexto();
         db.Add(d);
@@ -101,9 +101,31 @@ public class DocumentoQueriesTests(SqlServerFixture fx)
         // O coordenador novo vê o aluno, mas não o documento gravado com o curso anterior.
         Assert.Empty((await consultas.ListarAsync(c.Aluno, novo, 1, 20, ct))!.Itens);
         Assert.Null(await consultas.ObterAsync(d.Id, novo, ct));
-        // O antigo perde a ficha (aluno fora do curso dele), mas o documento continua do curso da criação.
-        Assert.Null(await consultas.ListarAsync(c.Aluno, antigo, 1, 20, ct));
+        // O antigo mantém a ficha (curso da época) e o documento compartilhado enquanto coordenava o aluno.
+        Assert.Equal([d.Id], (await consultas.ListarAsync(c.Aluno, antigo, 1, 20, ct))!.Itens.Select(i => i.Id));
         Assert.NotNull(await consultas.ObterArquivoAsync(d.Id, antigo, ct));
+    }
+
+    [Fact]
+    public async Task Compartilhar_apos_transferencia_vai_para_o_curso_atual()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var c = await CenarioAsync();
+        var cursoNovo = await fx.CriarCursoAsync();
+        var d = await SalvarAsync(c);
+        await using (var db = fx.CriarContexto())
+        {
+            var aluno = (await new AlunoRepository(db).ObterAsync(c.Aluno, ct))!;
+            aluno.TransferirCurso(cursoNovo, new DateOnly(2026, 10, 20), "Transferência", c.Prof, Agora.AddMinutes(1));
+            var documento = (await new DocumentoRepository(db).ObterAsync(d.Id, ct))!;
+            documento.Compartilhar("Necessário para adaptação", c.Prof, aluno.CursoAtualId, Agora.AddMinutes(2));
+            await new UnidadeDeTrabalho(db).SalvarAsync(ct);
+        }
+        await using var leitura = fx.CriarContexto();
+        var consultas = new DocumentoQueries(leitura);
+
+        Assert.NotNull(await consultas.ObterArquivoAsync(d.Id, Escopo(Perfis.CoordenadorCurso, cursoNovo), ct));
+        Assert.Null(await consultas.ObterArquivoAsync(d.Id, Escopo(Perfis.CoordenadorCurso, c.Curso), ct));
     }
 
     [Fact]

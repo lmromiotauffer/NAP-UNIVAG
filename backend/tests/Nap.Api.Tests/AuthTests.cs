@@ -106,4 +106,18 @@ public class AuthTests(ApiFactory fabrica)
         Assert.Equal(429, problema.GetProperty("status").GetInt32());
         Assert.False(string.IsNullOrWhiteSpace(problema.GetProperty("title").GetString()));
     }
+
+    [Fact]
+    public async Task Assinatura_anonima_acima_do_limite_da_janela_responde_429()
+    {
+        await using var limitado = fabrica.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, cfg) =>
+            cfg.AddInMemoryCollection(new Dictionary<string, string?> { ["Nap:LimiteLogin:TentativasAssinatura"] = "3" })));
+        var cliente = ApiFactory.NovoCliente(limitado);
+        var tentativa = new { token = "token-inexistente-para-o-teste-de-limite", codigo = "000000" };
+
+        for (var i = 0; i < 3; i++)
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, (await cliente.PostAsJsonAsync("/api/assinar/abrir", tentativa)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await cliente.PostAsJsonAsync("/api/assinar/abrir", tentativa)).StatusCode);
+    }
 }

@@ -3,7 +3,6 @@ using FluentValidation;
 using Nap.Application.Comum;
 using Nap.Application.Features.Cursos;
 using Nap.Application.Features.Usuarios;
-using Nap.Domain.Comum;
 
 namespace Nap.Application.Features.Producao.Queries;
 
@@ -29,14 +28,7 @@ public sealed class ExportarProducaoHandler(IValidator<ExportarProducaoQuery> va
         await validador.ValidarAsync(consulta, ct);
         var dados = await producao.Handle(new ObterProducaoQuery(consulta.Tipo, consulta.Referencia, consulta.ProfissionalId, consulta.CursoId), ct);
 
-        // Filtros efetivamente aplicados pelo recorte do perfil (o filtro recebido pode ser ignorado).
-        var (profissionalId, cursoId) = usuario.Perfil switch
-        {
-            Perfis.ProfissionalNap => ((Guid?)usuario.Id, consulta.CursoId),
-            Perfis.Gestao => (consulta.ProfissionalId, null),
-            Perfis.CoordenadorCurso => (null, usuario.CursoId),
-            _ => (consulta.ProfissionalId, consulta.CursoId),
-        };
+        var (profissionalId, cursoId) = ObterProducaoHandler.FiltrosEfetivos(usuario, consulta.ProfissionalId, consulta.CursoId);
         var nomeProfissional = profissionalId is { } p ? (await usuarios.ObterResumoAsync(p, ct))?.Nome ?? "Não encontrado" : "Todos";
         var nomeCurso = cursoId is { } c ? (await cursos.ListarAsync(ct)).FirstOrDefault(x => x.Id == c)?.Nome ?? "Não encontrado" : "Todos";
         var exportador = (await usuarios.ObterResumoAsync(usuario.Id, ct))?.Nome ?? "Usuário";

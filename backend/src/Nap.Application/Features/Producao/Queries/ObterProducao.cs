@@ -2,8 +2,12 @@ using FluentValidation;
 using Nap.Application.Comum;
 using Nap.Application.Features.Agenda;
 using Nap.Application.Features.Usuarios;
+using Nap.Domain.Agenda;
 using Nap.Domain.Comum;
+using Nap.Domain.Comum.ValueObjects;
 using Nap.Domain.Producao;
+// Minuto: minutos inteiros uma única vez, para categorias, escala e tempo extra concordarem.
+using static Nap.Domain.Comum.ValueObjects.IntervaloHorario;
 
 namespace Nap.Application.Features.Producao.Queries;
 
@@ -44,34 +48,10 @@ public sealed class ObterProducaoHandler(IValidator<ObterProducaoQuery> validado
             _ => inicio.AddYears(-1),
         });
 
-        IReadOnlyList<ProfissionalProducaoDto> profissionais;
-        Guid? cursoId;
-        var porProfissional = true;
-        switch (usuario.Perfil)
-        {
-            case Perfis.ProfissionalNap:
-                // Profissional só enxerga a própria produção; o filtro recebido é ignorado.
-                profissionais = await Profissionais(inicioAnterior, fim, usuario.Id, ct);
-                cursoId = consulta.CursoId;
-                porProfissional = false;
-                break;
-            case Perfis.Administrador or Perfis.CoordenadorNap:
-                profissionais = await Profissionais(inicioAnterior, fim, consulta.ProfissionalId, ct);
-                cursoId = consulta.CursoId;
-                break;
-            case Perfis.Gestao:
-                // Gestão vê agregados e por profissional; filtro de curso por aluno é ignorado.
-                profissionais = await Profissionais(inicioAnterior, fim, consulta.ProfissionalId, ct);
-                cursoId = null;
-                break;
-            case Perfis.CoordenadorCurso:
-                cursoId = usuario.CursoId ?? throw new ForbiddenException();
-                profissionais = await Profissionais(inicioAnterior, fim, null, ct);
-                porProfissional = false;
-                break;
-            default:
-                throw new ForbiddenException();
-        }
+        var (profissionalId, cursoId) = FiltrosEfetivos(usuario, consulta.ProfissionalId, consulta.CursoId);
+        var profissionais = await Profissionais(inicioAnterior, fim, profissionalId, ct);
+        // Linhas por profissional só para quem vê a equipe inteira.
+        var porProfissional = usuario.Perfil is not (Perfis.ProfissionalNap or Perfis.CoordenadorCurso);
 
         var ids = profissionais.Select(p => p.Id).ToList();
         var fatos = await consultas.CarregarFatosAsync(ids, inicioAnterior, fim, cursoId, ct);
@@ -81,7 +61,6 @@ public sealed class ObterProducaoHandler(IValidator<ObterProducaoQuery> validado
         (IReadOnlyList<CategoriaProducaoDto> Categorias, TempoDto? Tempo, TaxaDto Taxa, int? Pendentes) Agregar(DateOnly de, DateOnly ate,
             Guid? profissionalId = null)
         {
-            // ponytail: cada fatia varre todos os dias calculados, O(dias × fatias); agrupar por profissional/mês se o volume crescer.
             bool Inclui(Guid prof, DateOnly data) => data >= de && data <= ate && (profissionalId is null || prof == profissionalId);
             var doRecorte = dias.Where(d => Inclui(d.ProfissionalId, d.Data)).ToList();
             var r = doRecorte.Aggregate(CalculadoraProducao.Calcular([]), (soma, d) => soma.Somar(d.Resultado));
@@ -126,6 +105,19 @@ public sealed class ObterProducaoHandler(IValidator<ObterProducaoQuery> validado
             atual.Pendentes, serie, comparacao, linhas);
     }
 
+    /// <summary>
+    /// Filtros que o perfil de fato aplica (o recebido pode ser ignorado): Profissional NAP só a própria produção; Gestão sem
+    /// recorte de curso (por aluno); coordenador de curso só o seu curso. A exportação usa o mesmo para o cabeçalho.
+    /// </summary>
+    public static (Guid? ProfissionalId, Guid? CursoId) FiltrosEfetivos(IUsuarioAtual u, Guid? profissionalId, Guid? cursoId) => u.Perfil switch
+    {
+        Perfis.ProfissionalNap => (u.Id, cursoId),
+        Perfis.Administrador or Perfis.CoordenadorNap => (profissionalId, cursoId),
+        Perfis.Gestao => (profissionalId, null),
+        Perfis.CoordenadorCurso => (null, u.CursoId ?? throw new ForbiddenException()),
+        _ => throw new ForbiddenException(),
+    };
+
     /// <summary>Ativos e inativos com fatos na janela; o filtro aceita profissional inativo.</summary>
     private async Task<IReadOnlyList<ProfissionalProducaoDto>> Profissionais(DateOnly inicio, DateOnly fim, Guid? profissionalId,
         CancellationToken ct)
@@ -141,15 +133,37 @@ public sealed class ObterProducaoHandler(IValidator<ObterProducaoQuery> validado
         var fuso = relogio.Fuso;
         var agora = relogio.Agora;
         var hoje = relogio.Hoje;
-        // Minutos inteiros uma única vez, para categorias, escala e tempo extra concordarem.
-        static DateTimeOffset Minuto(DateTimeOffset i) => i.AddTicks(-(i.Ticks % TimeSpan.TicksPerMinute));
 
-        // Ocorrências e pendentes entram pela data civil do início; só as já terminadas.
+        // Trechos por data civil (no máximo dois: a duração é de até 12 h), fim exclusivo.
+        IEnumerable<(DateOnly Data, DateTimeOffset Inicio, DateTimeOffset Fim)> PorDia(DateTimeOffset inicio, DateTimeOffset fim)
+        {
+            for (var data = fuso.DataLocal(inicio); inicio < fim; data = data.AddDays(1))
+            {
+                var virada = fuso.InicioDoDia(data.AddDays(1));
+                var corte = fim < virada ? fim : virada;
+                yield return (data, inicio, corte);
+                inicio = corte;
+            }
+        }
+
+        // Só as já terminadas. A ocorrência conta no dia do início; o trecho que vira o dia entra no dia seguinte e desconta a
+        // escala dele, em vez de virar tempo extra do dia do início e ociosidade do seguinte.
         var ocorrencias = fatos.Ocorrencias.Where(o => o.Fim <= agora)
-            .ToLookup(o => (o.ProfissionalId, fuso.DataLocal(o.Inicio)), o => new OcorrenciaProducao(o.Categoria, Minuto(o.Inicio), Minuto(o.Fim), o.Individual));
-        var pendentes = fatos.Pendentes
-            .ToLookup(p => (p.ProfissionalId, fuso.DataLocal(p.Inicio)), p => (Minuto(p.Inicio), Minuto(p.Fim)));
-        var bloqueios = fatos.Bloqueios.ToLookup(b => b.ProfissionalId);
+            .SelectMany(o => PorDia(Minuto(o.Inicio), Minuto(o.Fim)).Select((t, i) => (Chave: (o.ProfissionalId, t.Data),
+                Ocorrencia: new OcorrenciaProducao(o.Categoria, t.Inicio, t.Fim, o.Individual, Continuacao: i > 0))))
+            .ToLookup(x => x.Chave, x => x.Ocorrencia);
+        // Pendentes como as ocorrências: o trecho que vira o dia ocupa a escala do seguinte, sem contar de novo.
+        var trechosPendentes = fatos.Pendentes
+            .SelectMany(p => PorDia(Minuto(p.Inicio), Minuto(p.Fim)).Select((t, i) => (Chave: (p.ProfissionalId, t.Data),
+                Trecho: (t.Inicio, t.Fim), Continuacao: i > 0)))
+            .ToList();
+        var pendentes = trechosPendentes.Where(x => !x.Continuacao).ToLookup(x => x.Chave, x => x.Trecho);
+        var pendentesContinuacao = trechosPendentes.Where(x => x.Continuacao).ToLookup(x => x.Chave, x => x.Trecho);
+        // Indexados uma vez por (profissional, dia que tocam): o laço de dias não percorre todos os bloqueios a cada dia.
+        var bloqueios = fatos.Bloqueios
+            .SelectMany(b => PorDia(Minuto(b.Inicio), Minuto(b.Fim)).Select(t => (Chave: (b.ProfissionalId, t.Data),
+                Intervalo: (Minuto(b.Inicio), Minuto(b.Fim)))))
+            .ToLookup(x => x.Chave, x => x.Intervalo);
         var escalas = fatos.Escalas.ToLookup(e => e.ProfissionalId);
         var feriados = fatos.Feriados.ToHashSet();
 
@@ -157,22 +171,21 @@ public sealed class ObterProducaoHandler(IValidator<ObterProducaoQuery> validado
         foreach (var p in profissionais)
         {
             var prof = p.Id;
-            // Inativo não tem capacidade a partir da desativação; ocorrências e ajustes continuam contando.
-            // ponytail: sem DesativadoEm (desativado antes do campo existir) a capacidade é zero no período inteiro.
-            var semCapacidadeDesde = p.Ativo ? DateOnly.MaxValue : p.DesativadoEm ?? DateOnly.MinValue;
+            // Sem capacidade no período de inatividade (InativoEm); ocorrências e ajustes continuam contando.
             // Nem antes de existir (AtivoDesde nula = criado antes do campo: sem limite).
             var comCapacidadeDesde = p.AtivoDesde ?? DateOnly.MinValue;
             for (var data = de; data <= ate; data = data.AddDays(1))
             {
-                // Mesma escolha de EscalaRepository.ObterVigenteAsync: a vigente de início mais recente; sem ela, a padrão.
-                var escala = escalas[prof].Where(e => e.Vigente(data)).MaxBy(e => e.VigenciaInicio);
+                // Sem escala vigente, a padrão.
+                var escala = EscalaProfissional.VigenteEm(escalas[prof], data);
                 // Administrador só tem capacidade com escala própria: a padrão vale para a equipe de atendimento.
                 var faixa = escala is null && p.Perfil == Perfis.Administrador ? null : ServicoEscala.FaixaDe(escala, data);
                 var dia = new DiaProducao(data,
-                    faixa is null || data >= semCapacidadeDesde || data < comCapacidadeDesde ? [] : [(fuso.Instante(data, faixa.Inicio), fuso.Instante(data, faixa.Fim))],
+                    faixa is null || p.InativoEm(data) || data < comCapacidadeDesde ? [] : [(fuso.Instante(data, faixa.Inicio), fuso.Instante(data, faixa.Fim))],
                     feriados.Contains(data),
-                    bloqueios[prof].Where(b => fuso.DataLocal(b.Inicio) <= data && fuso.DataLocal(b.Fim) >= data).Select(b => (Minuto(b.Inicio), Minuto(b.Fim))).ToList(),
-                    ocorrencias[(prof, data)].ToList(), pendentes[(prof, data)].ToList(), data == hoje ? agora : null);
+                    bloqueios[(prof, data)].ToList(),
+                    ocorrencias[(prof, data)].ToList(), pendentes[(prof, data)].ToList(), data == hoje ? agora : null,
+                    pendentesContinuacao[(prof, data)].ToList());
                 dias.Add(new DiaCalculado(prof, data, CalculadoraProducao.Calcular([dia])));
             }
         }

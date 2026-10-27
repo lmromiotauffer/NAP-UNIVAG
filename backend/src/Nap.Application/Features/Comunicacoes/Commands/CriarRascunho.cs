@@ -19,7 +19,9 @@ public class CriarRascunhoValidator : AbstractValidator<CriarRascunhoCommand>
 {
     public CriarRascunhoValidator()
     {
-        RuleFor(x => x.Tipo).IsInEnum();
+        // Mesma regra do envio: um rascunho de PEI nunca poderia ser enviado. O encaminhamento pode faltar no rascunho.
+        RuleFor(x => x.Tipo).IsInEnum()
+            .NotEqual(TipoMensagem.EnvioPei).WithMessage("O envio de PEI é gerado só pela publicação do PEI.");
         RuleFor(x => x.Assunto).NotEmpty().WithMessage("Informe o assunto.").Length(3, 200);
         RuleFor(x => x.Corpo).NotEmpty().WithMessage("Informe o texto da mensagem.").MaximumLength(10000);
     }

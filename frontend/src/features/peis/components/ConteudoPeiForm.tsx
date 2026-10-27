@@ -13,7 +13,6 @@ import { normalizarErro, tratarErro } from "../../../lib/api";
 import type { VersaoPeiDetalhe } from "../../../lib/types";
 import { useAcaoVersao, useSalvarConteudo } from "../hooks/usePeis";
 import { CAMPOS_PEDAGOGICOS } from "../rotulos";
-import { peiService } from "../services/peiService";
 
 const texto = z
   .string()
@@ -72,11 +71,10 @@ export function ConteudoPeiForm({ versao: dto, aoEnviado, aoConflito }: { versao
   });
 
   async function gravar(d: Saida) {
-    await salvar.mutateAsync({ id: dto.id, versao, body: { ...d, demandaInterna: comDemanda ? d.demandaInterna : c.demandaInterna } });
-    // O PUT muda o ETag: a próxima ação parte da versão que acabamos de gravar.
-    const fresca = await peiService.obter(dto.id);
-    setVersao(fresca.versao);
-    return fresca.versao;
+    // A próxima ação parte da versão que o PUT gravou (reler aqui pegaria a de outra aba e passaria por cima dela).
+    const nova = await salvar.mutateAsync({ id: dto.id, versao, body: { ...d, demandaInterna: comDemanda ? d.demandaInterna : c.demandaInterna } });
+    setVersao(nova);
+    return nova;
   }
 
   async function aoSalvar(d: Saida) {
@@ -133,7 +131,7 @@ export function ConteudoPeiForm({ versao: dto, aoEnviado, aoConflito }: { versao
           Rascunho salvo.
         </Alert>
       )}
-      <div className="grid gap-3 sm:grid-cols-2 sm:max-w-md">
+      <div className="grid gap-4 sm:grid-cols-2 sm:max-w-md">
         <Field rotulo="Início da vigência" erro={errors.vigenciaInicio?.message} obrigatorio>
           <Input type="date" {...register("vigenciaInicio")} />
         </Field>

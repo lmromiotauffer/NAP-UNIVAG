@@ -21,6 +21,8 @@ public sealed class FecharSemanaHandler(IValidator<FecharSemanaCommand> validado
     IProducaoQueries consultas, IUsuarioQueries usuarios, IUsuarioAtual usuario, IRelogio relogio, IAuditoria auditoria,
     IUnidadeDeTrabalho uow, ICacheConsultas cache)
 {
+    public const string MensagemEmAndamento = "A semana tem compromisso ainda em andamento. Feche depois que ele terminar.";
+
     public async Task Handle(FecharSemanaCommand comando, CancellationToken ct = default)
     {
         await validador.ValidarAsync(comando, ct);
@@ -28,8 +30,9 @@ public sealed class FecharSemanaHandler(IValidator<FecharSemanaCommand> validado
         if (comando.ProfissionalId != usuario.Id)
         {
             if (!usuario.EhCoordenacao()) throw new ForbiddenException();
-            // Inativo também: a lista de semanas mostra quem teve produção e ainda precisa ser fechado.
-            if (await usuarios.ObterResumoAsync(comando.ProfissionalId, ct) is not { } alvo || !Perfis.EquipeNap.Contains(alvo.Perfil))
+            // Mesmo critério da lista de semanas: inativo ou quem saiu da equipe, mas teve produção na semana, também fecha.
+            if ((await usuarios.ListarProfissionaisDaProducaoAsync(comando.Semana, comando.Semana.AddDays(6), relogio.Fuso,
+                    comando.ProfissionalId, ct)).Count == 0)
                 throw new NotFoundException("Profissional");
         }
 
@@ -40,6 +43,9 @@ public sealed class FecharSemanaHandler(IValidator<FecharSemanaCommand> validado
             var fechamento = existente ?? FechamentoSemanal.Criar(comando.ProfissionalId, comando.Semana);
             // Primeiro a regra de domínio (semana encerrada); só então a contagem de pendências.
             fechamento.Fechar(usuario.Id, relogio.Agora, relogio.Hoje);
+            // Um compromisso que começou na semana e ainda não terminou viraria pendência da semana já fechada.
+            if (await consultas.ContarEmAndamentoAsync(comando.ProfissionalId, comando.Semana, tct) > 0)
+                throw new DomainException(MensagemEmAndamento);
             var pendentes = await consultas.ContarPendentesAsync(comando.ProfissionalId, comando.Semana, tct);
             if (pendentes > 0 && !comando.ConfirmarPendencias)
                 throw new DomainException($"A semana tem {pendentes} pendências de classificação.");

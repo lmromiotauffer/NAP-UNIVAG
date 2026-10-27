@@ -15,7 +15,7 @@ public class AgendaRealizacaoTests(SqlServerFixture fx)
     {
         var prof = await fx.CriarProfissionalAsync(nome: nome);
         var reuniao = Compromisso.Criar(TipoCompromisso.ReuniaoEquipe, "Reunião", IntervaloHorario.Criar(Local(16, 9), Local(16, 10)),
-            prof, null, null, prof, Agora);
+            prof, null, null, prof);
         // Realizada às 11h–12h, depois do agendado (9h–10h).
         reuniao.RegistrarRealizacao(IntervaloHorario.Criar(Local(16, 11), Local(16, 12)), prof, Agora);
         await using var db = fx.CriarContexto();
@@ -36,6 +36,29 @@ public class AgendaRealizacaoTests(SqlServerFixture fx)
         Assert.False(await repo.ExisteConflitoAsync(prof, null, IntervaloHorario.Criar(Local(16, 9), Local(16, 10)), null, ct));
         Assert.False(await repo.ExisteConflitoAsync(prof, null, IntervaloHorario.Criar(Local(16, 12), Local(16, 13)), null, ct));
         Assert.False(await repo.ExisteConflitoAsync(prof, null, IntervaloHorario.Criar(Local(16, 11), Local(16, 12)), reuniao.Id, ct));
+    }
+
+    [Fact]
+    public async Task Checagem_do_grupo_devolve_so_quem_conflita_e_respeita_os_ignorados()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (prof, reuniao) = await CriarReuniaoRealizadaAsync("Profissional grupo realização");
+        var livre = await fx.CriarProfissionalAsync(nome: "Profissional grupo livre");
+        var agendado = Compromisso.Criar(TipoCompromisso.Bloqueio, "Bloqueio", IntervaloHorario.Criar(Local(16, 11), Local(16, 12)),
+            livre, null, null, livre);
+        await using (var escrita = fx.CriarContexto())
+        {
+            escrita.Add(agendado);
+            await escrita.SaveChangesAsync(ct);
+        }
+        await using var db = fx.CriarContexto();
+        var repo = new AgendaRepository(db);
+        var horario = IntervaloHorario.Criar(Local(16, 11), Local(16, 12));
+
+        Assert.Equal(new[] { prof, livre }.Order(), (await repo.ProfissionaisComConflitoAsync([prof, livre], horario, [], ct)).Order());
+        // Cada participante ignora a própria instância (remarcação do grupo).
+        Assert.Equal([prof], await repo.ProfissionaisComConflitoAsync([prof, livre], horario, [agendado.Id], ct));
+        Assert.Empty(await repo.ProfissionaisComConflitoAsync([prof, livre], horario, [agendado.Id, reuniao.Id], ct));
     }
 
     [Fact]

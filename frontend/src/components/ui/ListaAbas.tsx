@@ -49,7 +49,8 @@ export function ListaAbas<T extends string>({
   }
 
   return (
-    <div role="tablist" aria-label={rotulo} onKeyDown={aoTeclar} className="relative flex shrink-0 gap-0.5 overflow-x-auto overflow-y-hidden border-b border-borda">
+    // [scrollbar-width:none]: no celular a lista rola na horizontal, mas a barra ficava desenhada sob as abas (como no trilho, rola por toque, setas e scrollIntoView).
+    <div role="tablist" aria-label={rotulo} onKeyDown={aoTeclar} className="relative flex shrink-0 gap-0.5 overflow-x-auto overflow-y-hidden border-b border-borda [scrollbar-width:none]">
       <span
         ref={indicador}
         aria-hidden="true"
@@ -69,7 +70,7 @@ export function ListaAbas<T extends string>({
           tabIndex={atual === a.chave ? 0 : -1}
           onClick={() => aoTrocar(a.chave)}
           className={cn(
-            "-mb-px border-b-2 border-transparent px-3.5 py-2.5 text-denso font-semibold whitespace-nowrap transition-colors duration-150 pointer-coarse:min-h-11 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primaria",
+            "-mb-px cursor-pointer border-b-2 border-transparent px-3.5 py-2.5 text-denso font-semibold whitespace-nowrap transition-colors duration-150 pointer-coarse:min-h-11 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primaria",
             atual === a.chave ? "text-texto" : "text-suave hover:text-texto",
           )}
         >
